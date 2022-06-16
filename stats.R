@@ -1,0 +1,43 @@
+library(openxlsx)
+library(ggplot2)
+library(ggfortify)
+library(jcolors)
+require(gridExtra)
+library(grid)
+library(matrixStats)
+library(tidyverse)
+library(RColorBrewer)
+library(sctransform)
+library(glassoFast)
+library(igraph)
+library(ggraph)
+library(graphlayouts)
+library(Signac)
+library(Seurat)
+library(patchwork)
+library(hdf5r)
+library(GenomeInfoDbData)
+library(GenomicRanges)
+library(GenomicAlignments)
+library(Biostrings)
+library(rtracklayer)
+library(GenomicFeatures)
+library(Seurat)
+
+
+source('./util_funcs.R')
+
+## Read scRAN-Seq data
+S.O <- readRDS('../Input/toxo_cdc/rds/S.O_intra_not_down_sample.rds')
+
+print(S.O)
+
+Tg_ATAC <- readRDS('../Input/toxo_cdc/rds/S.O_ATAC_peak.rds')
+S.O.ATAC <- readRDS('../Input/toxo_cdc/rds/S.O_ATAC_not_integrated_not_down_samples.rds')
+peaks.dat  <- readRDS('../Input/toxo_cdc/rds/sc_atac_peaks_macs2.rds')
+dim(peaks.dat)
+region_gene_assignment <- readRDS('../Input/toxo_cdc/rds/sc_atac_regions_gene_assignment.rds')
+sc.rna.sc.atac.joint.long <- readRDS('../Input//toxo_cdc/rds/AP2_sc_rna_sc_atac_joint_dtw_clust.rds')
+
+length(unique(sc.rna.sc.atac.joint.long$Name))
+length(unique(region_gene_assignment$GeneID))

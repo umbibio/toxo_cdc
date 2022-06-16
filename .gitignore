@@ -1,6 +1,11 @@
 # Rstudio project
 .Rproj
 
+.DS_Store
+.RDataTmp
+playground
+toxo_cdc.Rproj
+lab_space.R
 # History files
 .Rhistory
 .Rapp.history
