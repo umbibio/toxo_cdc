@@ -110,7 +110,7 @@ metadata <- read.csv(
 metadata.filt <- metadata
 metadata.filt$Sample <- rownames(metadata.filt)
 metadata.filt <- metadata.filt[metadata.filt$Sample %in% colnames(counts), ]
-peak_anno <- read_tsv("../Input/toxo_scATAC_MJ/filtered_peak_bc_matrix/peaks.bed")
+peak_anno <- read_tsv("../Input/toxo_scATAC_MJ/filtered_peak_bc_matrix/peaks.bed", col_names = c('Chr', 'strt', 'stp'))
 
 #counts <- Read10X_h5(filename = "../Input/scATAC/ME49_cell_ranger/filtered_peak_bc_matrix.h5")
 #peak_anno <- read_tsv("../Input/scATAC/ME49_cell_ranger/peak_annotation.tsv")
@@ -120,8 +120,8 @@ chrom_assay <- CreateChromatinAssay(
   sep = c(":", "-"),
   genome = seqinfo(tx_trans),
   fragments = '../Input/toxo_scATAC_MJ/fragments.tsv.gz',
-  min.cells = 10,
-  min.features = 200
+  min.cells = 5,
+  min.features = 100
 )
 
 Tg_ATAC <- CreateSeuratObject(
@@ -153,6 +153,15 @@ peaks <- CallPeaks(
   additional.args = "--nomodel -B --SPMR"
 )
 
+## Save peaks
+peaks.dat <- as.data.frame(peaks)
+peaks.dat <- peaks.dat[grep('TGME49', peaks.dat$seqnames), ] %>% 
+  dplyr::filter(10^(-neg_log10qvalue_summit) < 0.1) %>% 
+  dplyr::select(seqnames, start, end, width, strand,  score, fold_change, contains('log')) 
+colnames(peaks.dat)[1] <- 'chr'
+
+saveRDS(peaks.dat, '../Input/toxo_cdc/rds/sc_atac_peaks_macs2.rds')
+##
 
 # fragments <- CreateFragmentObject(
 #   path = "../Input/scATAC/ME49_cell_ranger/fragments.tsv.gz",
@@ -187,8 +196,8 @@ VlnPlot(
 
 Tg_ATAC <- subset(
   x = Tg_ATAC,
-  subset = peak_region_fragments > 1000 &
-    peak_region_fragments < 4000 &
+  subset = peak_region_fragments > 200 &
+    peak_region_fragments < 6000 &
     pct_reads_in_peaks > 40 &
     #blacklist_ratio < 0.05 &
     nucleosome_signal < 4 &
@@ -205,8 +214,8 @@ Tg_ATAC <- RunSVD(Tg_ATAC)
 DepthCor(Tg_ATAC)
 
 ## Must remove highly correlating components
-Tg_ATAC <- RunUMAP(object = Tg_ATAC, reduction = 'lsi', dims = seq(1:30)[-c(1,5)])
-Tg_ATAC <- FindNeighbors(object = Tg_ATAC, reduction = 'lsi', dims = seq(1:30)[-c(1,5)])
+Tg_ATAC <- RunUMAP(object = Tg_ATAC, reduction = 'lsi', dims = seq(1:30)[-c(1,3)])
+Tg_ATAC <- FindNeighbors(object = Tg_ATAC, reduction = 'lsi', dims = seq(1:30)[-c(1,3)])
 Tg_ATAC <- FindClusters(object = Tg_ATAC, verbose = FALSE, algorithm = 3)
 
 
@@ -230,10 +239,12 @@ S.O.ATAC <- NormalizeData(
   scale.factor = median(S.O.ATAC$nCount_RNA)
 )
 
+saveRDS(S.O.ATAC, '../Input/toxo_cdc/rds/S.O_ATAC_not_integrated_not_down_samples.rds')
+
 DefaultAssay(S.O.ATAC) <- 'RNA'
-S.O.ATAC <- FindVariableFeatures(S.O.ATAC, selection.method = "vst", nfeatures = 3000)
+S.O.ATAC <- FindVariableFeatures(S.O.ATAC, selection.method = "vst", nfeatures = 6000)
 S.O.list <- list(RNA = S.O.ME49, ATAC = S.O.ATAC)
-features <- SelectIntegrationFeatures(object.list = S.O.list)
+features <- SelectIntegrationFeatures(object.list = S.O.list, nfeatures = 6000)
 reference_dataset <- 1
 anchors <- FindIntegrationAnchors(object.list = S.O.list, 
                                   anchor.features = features, reference = reference_dataset)
@@ -242,7 +253,7 @@ S.O.integrated <- IntegrateData(anchorset = anchors)
 DefaultAssay(S.O.integrated) <- "integrated"
 S.O.integrated <- ScaleData(object = S.O.integrated, verbose = FALSE)
 S.O.integrated <- RunPCA(S.O.integrated, features = VariableFeatures(object = S.O.integrated))
-S.O.integrated <- FindVariableFeatures(S.O.integrated, nfeatures = 3000)
+S.O.integrated <- FindVariableFeatures(S.O.integrated, nfeatures = 6000)
 S.O.integrated <- FindNeighbors(S.O.integrated, dims = 1:10, reduction = 'pca')
 S.O.integrated <- FindClusters(S.O.integrated, resolution = 0.2)
 S.O.integrated <- RunUMAP(S.O.integrated, dims = 1:13)
@@ -294,62 +305,9 @@ saveRDS(S.O.integrated, '../Input/toxo_cdc/rds/S.O.intra_atac_integrated.rds')
 
 
 
-
-##################
-
-# ggsave(filename="../Output/scClockFigs/merged_scATAC_scRNA.pdf",
-#        plot=p,
-#        width = 6, height = 6,
-#        units = "in", # other options are "in", "cm", "mm"
-#        dpi = 300
-# )
-
-
-
-## Expression plot
-
-prod.desc <- left_join(prod.desc, TGGT1_ME49, by = c('GeneID' = 'TGGT1'))
-prod.desc[grep('RON2', prod.desc$ProductDescription), ]
-
-RON2.id <- 'TGME49-300100'
-DefaultAssay(S.O.integrated) <- 'RNA'
-S.O.integrated@active.ident <- factor(S.O.integrated@active.ident, levels = c('G1.a', 'G1.b', 'S', 'M', 'C'))
-
-p <- VlnPlot(S.O.integrated, features = RON2.id, slot = "data", log = TRUE, split.by = 'orig.ident')
-plot(p)
-# ggsave(filename="../Output/scClockFigs/RON2_expression_accessibility_violin_merged_scATAC_scRNA.pdf",
-#        plot=p,
-#        width = 6, height = 6,
-#        units = "in", # other options are "in", "cm", "mm"
-#        dpi = 300
-# )
-
-
-p <- FeaturePlot(S.O.integrated, features = RON2.id, split.by = 'orig.ident', 
-                 reduction = 'pca', label = T, label.size = 4) + NoLegend() + 
-  theme(panel.spacing = unit(0.5, "lines")) + 
-  theme(axis.text.x = element_text(face="bold", size=12, angle=0)) +
-  theme(axis.text.y = element_text(face="bold", size=12, angle=0)) +
-  theme(
-    axis.title.x = element_text(size=14, face="bold"),
-    axis.title.y = element_text(size=14, face="bold")
-  )
-
-
-plot(p)
-# ggsave(filename="../Output/scClockFigs/RON2_expression_accessibility_plot_merged_scATAC_scRNA.pdf",
-#        plot=p,
-#        width = 6, height = 6,
-#        units = "in", # other options are "in", "cm", "mm"
-#        dpi = 300
-# )
-
-###### Pileup Tracks
-
-
-###### Pileup Tracks
-## gene.activity matrix created with other approaches can be passed here
+### Differential peak expression
 Tg_ATAC[['RNA']] <- CreateAssayObject(counts = gene.activities)
+
 Tg_ATAC <- NormalizeData(
   object = Tg_ATAC,
   assay = 'RNA',
@@ -409,7 +367,7 @@ plot1 | plot2
 head(da_peaks)
 
 top.da <- da_peaks %>% group_by(cluster) %>% slice_max(n = 1, order_by = avg_log2FC)
-region <- StringToGRanges(regions = gsub('TGME49-', 'TGME49_', top.da$gene[5]),  sep = c("-", "-"))
+region <- StringToGRanges(regions = gsub('TGME49-', 'TGME49_', top.da$gene[4]),  sep = c("-", "-"))
 #region <- StringToGRanges(regions = gsub('TGME49-', 'TGME49_', rownames(da_peaks)[5]),  sep = c("-", "-"))
 
 xx <- findOverlaps(region, tx_trans)
@@ -419,16 +377,141 @@ my.gene <- tx_trans[xx@to]$gene_id[1]
 
 DefaultAssay(Tg_ATAC) <- 'RNA'
 
+DefaultAssay(atac_sub) <- "RNA"
 p1 <- FeaturePlot(
-  object = Tg_ATAC,
+  object = atac_sub,
   features = gsub('_', '-', my.gene),
   pt.size = 0.4,
   max.cutoff = 'q0',
   ncol = 1,
-  reduction = 'tsne'
+  reduction = 'pca'
 )
 
 plot(p1)
+
+
+saveRDS(Tg_ATAC, '../Input/toxo_cdc/rds/S.O_ATAC_peak.rds')
+
+#### region_gene assignments
+## Generating region/gene peak  counts
+##Find Markers
+
+peak.regions <- rownames(Tg_ATAC@assays$peaks@data)
+
+regions <- lapply(peak.regions, function(rr){
+  region <- StringToGRanges(regions = gsub('TGME49-', 'TGME49_', rr),  sep = c("-", "-"))
+  xx <- findOverlaps(region, tx_trans, maxgap = 100)
+  tx_trans[xx@to]$gene_id
+  L = list(region = region, gene_id = tx_trans[xx@to]$gene_id)
+})
+
+regions <- lapply(regions, function(rr){
+  if(length(rr$gene_id) == 0){
+    rr$gene_id <- NA
+  }
+  data.frame(rr$gene_id, as.data.frame(rr$region))
+})
+
+regions <- bind_rows(regions)
+colnames(regions) <- c('GeneID', 'chr', 'strt', 'stp', 'width', 'strand')
+
+region_gene_assignment <- regions %>% 
+  transmute(chr = chr, strt = strt, stp = stp, width = width, strand = strand, GeneID = GeneID)
+
+region_gene_assignment <- region_gene_assignment %>% na.omit()
+
+gtf.file <- "../Input/toxo_genomics/genome/ToxoDB-52_TgondiiME49_filter.gtf"
+gtf <- read.table(gtf.file, header = F, sep = '\t', quote = NULL)
+gtf.filt <- gtf %>% dplyr::filter(grepl('TGME49*', V1))
+## filter gtf for transcripts only 
+gtf.filt.trn <- gtf.filt %>% filter(V3 == "transcript")
+gtf.filt.trn$gene_name <- gsub("\\;.*", "", gsub("transcript_id ", "", gsub("-t.*", "", gtf.filt.trn$V9)))
+gtf.filt.trn$gene_name <- gsub("\"", "", gtf.filt.trn$gene_name)
+
+region_gene_assignment$strand <- gtf.filt.trn$V7[match(region_gene_assignment$GeneID, gtf.filt.trn$gene_name)]
+saveRDS(region_gene_assignment, '../Input/toxo_cdc/rds/sc_atac_regions_gene_assignment.rds')
+
+
+#### AP2s coverage
+sig.AP2s <- readRDS('../Input/toxo_cdc/rds/sig_AP2s.rds')
+sig.AP2s <- sig.AP2s %>% transmute(GeneID = GeneID.x, Name = Ap2Name) %>% distinct()
+regions.AP2s <- inner_join(regions, sig.AP2s, by = 'GeneID')
+
+
+
+### Coverage plots
+regions.AP2s$region <- paste(regions.AP2s$chr, regions.AP2s$strt, regions.AP2s$stp, sep = '-')
+
+my.region <- StringToGRanges(regions = regions.AP2s$region[4],  sep = c("-", "-"))
+#region <- StringToGRanges(regions = gsub('TGME49-', 'TGME49_', rownames(da_peaks)[5]),  sep = c("-", "-"))
+
+Idents(Tg_ATAC) <- 'phase'
+Tg_ATAC@active.ident <- factor(Tg_ATAC@active.ident, levels = c('G1.a', 'G1.b', 'S', 'M', 'C'))
+DefaultAssay(Tg_ATAC) <- 'peaks'
+p2 <- CoveragePlot(
+  object = Tg_ATAC,
+  sep = c("-", "-"),
+  #region = gsub('TGME49-', 'TGME49_', rownames(Tg_ATAC)[1:3]),
+  region = my.region,
+  #region = gsub('TGME49-', 'TGME49_', VariableFeatures(Tg_ATAC)[20]),
+  extend.upstream = 100,
+  extend.downstream =15000
+)
+
+plot(p2)
+ggsave(filename="../Output/toxo_cdc/figures/AP2III_2_track_pileup_by_phase.pdf",
+       plot=p2,
+       width = 6, height = 6,
+       units = "in", # other options are "in", "cm", "mm"
+       dpi = 300
+)
+
+
+
+## Expression plot
+
+prod.desc <- left_join(prod.desc, TGGT1_ME49, by = c('GeneID' = 'TGGT1'))
+prod.desc[grep('RON2', prod.desc$ProductDescription), ]
+
+RON2.id <- 'TGME49-300100'
+DefaultAssay(S.O.integrated) <- 'RNA'
+S.O.integrated@active.ident <- factor(S.O.integrated@active.ident, levels = c('G1.a', 'G1.b', 'S', 'M', 'C'))
+
+p <- VlnPlot(S.O.integrated, features = RON2.id, slot = "data", log = TRUE, split.by = 'orig.ident')
+plot(p)
+# ggsave(filename="../Output/scClockFigs/RON2_expression_accessibility_violin_merged_scATAC_scRNA.pdf",
+#        plot=p,
+#        width = 6, height = 6,
+#        units = "in", # other options are "in", "cm", "mm"
+#        dpi = 300
+# )
+
+
+p <- FeaturePlot(S.O.integrated, features = RON2.id, split.by = 'orig.ident', 
+                 reduction = 'pca', label = T, label.size = 4) + NoLegend() + 
+  theme(panel.spacing = unit(0.5, "lines")) + 
+  theme(axis.text.x = element_text(face="bold", size=12, angle=0)) +
+  theme(axis.text.y = element_text(face="bold", size=12, angle=0)) +
+  theme(
+    axis.title.x = element_text(size=14, face="bold"),
+    axis.title.y = element_text(size=14, face="bold")
+  )
+
+
+plot(p)
+# ggsave(filename="../Output/scClockFigs/RON2_expression_accessibility_plot_merged_scATAC_scRNA.pdf",
+#        plot=p,
+#        width = 6, height = 6,
+#        units = "in", # other options are "in", "cm", "mm"
+#        dpi = 300
+# )
+
+###### Pileup Tracks
+
+
+###### Pileup Tracks
+## gene.activity matrix created with other approaches can be passed here
+
 
 # ggsave(filename="../Output/scClockFigs/RON2_ATAC_activity.pdf",
 #        plot=p1,
@@ -459,7 +542,6 @@ ggsave(filename="../Output/scClockFigs/RON2_track_pileup_by_phase.pdf",
        dpi = 300
 )
 
-
 # p3 <- DimPlot(object = Tg_ATAC, label = TRUE, reduction = 'tsne') + NoLegend()
 # 
 # ggsave(filename="../Output/scClockFigs/tsne_clusters.pdf",
@@ -470,24 +552,61 @@ ggsave(filename="../Output/scClockFigs/RON2_track_pileup_by_phase.pdf",
 # )
 
 
-saveRDS(Tg_ATAC, '../Input/toxo_cdc/rds/Tg_ATAC.rds')
-saveRDS(S.O.integrated, '../Input/toxo_cdc/rds/S.O.intra_atac_integrated.rds')
-
+]
 ##
 
 
 
-## Generating region/gene peak  counts
-##Find Markers
 
-peak.regions <- rownames(Tg_ATAC@assays$peaks@data)
-
-regions <- lapply(peak.regions, function(rr){
-  region <- StringToGRanges(regions = gsub('TGME49-', 'TGME49_', rr),  sep = c("-", "-"))
-  region
-})
 
 singleGRange <- GRanges(as.data.frame(GRangesList(regions)))
+saveRDS(as.data.frame(singleGRange), '../Input/toxo_cdc/rds/atac_regions.rds')
+
+gtf.file <- "../Input/toxo_genomics/genome/ToxoDB-52_TgondiiME49_filter.gtf"
+gtf <- read.table(gtf.file, header = F, sep = '\t', quote = NULL)
+gtf.filt <- gtf %>% dplyr::filter(grepl('TGME49*', V1))
+## Remove the first Exon from transcripts.
+gtf.exon <- gtf.filt %>% dplyr::filter(V3 == 'exon')
+gtf.exon.sort <- gtf.exon %>% arrange(V1, V4, V5)
+parse.str <- strsplit(gtf.exon$V9, split = ' ')
+inds <- unlist(lapply(parse.str , function(x) which(grepl("gene_id", x)) + 1))
+gtf.exon$gene_name <- gsub(";", "", unlist(lapply(1:length(inds), function(i) parse.str[[i]][inds[[i]]])))
+gtf.exon$gene_name <- gsub("\"", "", gtf.exon$gene_name)
+gtf.exon <- gtf.exon %>% group_by(V9) %>% mutate(exon.ord = ifelse(V7 == '+', 1:n(), seq(n(), 1, by = -1)),
+                                                 multiple.exon = ifelse(n() > 1, T, F))
+## Remove the exon1, but keep the Intron 1
+gtf.exon.2Ton <- gtf.exon %>% mutate(V10 = ifelse(multiple.exon & V7 == '-', min(V4), 
+                                                  ifelse(multiple.exon & V7 == '+', min(V5), V4)),
+                                     V11 = ifelse(multiple.exon & V7 == '-', max(V4), 
+                                                  ifelse(multiple.exon & V7 == '+', max(V5), V5))) %>%
+  mutate(V4 = V10, V5 = V11) %>% 
+  dplyr::select(-c(exon.ord,multiple.exon, V10, V11) ) %>% distinct()
+
+
+## filter gtf for transcripts only 
+gtf.filt.trn <- gtf.filt %>% filter(V3 == "transcript")
+gtf.filt.trn$gene_name <- gsub("\\;.*", "", gsub("transcript_id ", "", gsub("-t.*", "", gtf.filt.trn$V9)))
+gtf.filt.trn$gene_name <- gsub("\"", "", gtf.filt.trn$gene_name)
+
+## Filter for first exon coordinates
+tmp.neg <- gtf.exon %>% filter(V7 == "-") %>% group_by(V9) %>%  dplyr::slice(which.max(V5))
+tmp.pos <- gtf.exon %>% filter(V7 == "+") %>% group_by(V9) %>%  dplyr::slice(which.min(V5))
+gtf.exon1 <- bind_rows(tmp.pos, tmp.neg)
+gtf.exon1.sort <- gtf.exon1 %>% arrange(V1, V4, V5)
+
+library(bedtoolsr)
+ranges.tab <- as.data.frame(singleGRange)
+ranges.tab <- ranges.tab %>% dplyr::filter(grepl('TGME49*', seqnames)) %>% arrange(seqnames, start, end)
+
+peaks.genes.dist <- bedtoolsr::bt.closest(a = as.data.frame(ranges.tab), 
+                                          b = as.data.frame(gtf.exon1.sort), D = "b", k = 5)
+
+peaks.genes.dist$gene_name <- gsub("\\;.*", "", gsub("transcript_id ", "", gsub("-t.*", "", peaks.genes.dist$V13)))
+#gtf.filt.trn$gene_name <- gsub("\"", "", gtf.filt.trn$gene_name)
+
+peaks.genes.dist.trns <- left_join(peaks.genes.dist, gtf.filt.trn, by = "gene_name")
+
+bedtoolsr::bt.closest()
 region_to_gene <- findOverlaps(singleGRange, tx_trans)
 subsetByOverlaps(singleGRange, tx_trans)
 

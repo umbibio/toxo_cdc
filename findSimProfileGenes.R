@@ -105,9 +105,22 @@ my.features <- gsub('_', '-', IMC_markers$TGME49)
 
 my.features <- 'TGME49-203380'
 my.features <- 'TGME49-250800'
+
+
+## New list from MJ, MNK1
+MNK1  <- 'TGME49-275610'
+IMC29 <- 'TGME49-243200'
+IMC32 <- 'TGME49-232150'
+BCC0  <- 'TGME49-294860'
+BCC3  <- 'TGME49-311770'
+FBXO1 <- 'TGME49-310930'
+AC9   <- 'TGME49-246950'
+
+my.features <- c(MNK1, IMC29, IMC32, BCC0, BCC3, FBXO1, AC9)
+my.names <- c('MNK1', 'IMC29', 'IMC32', 'BCC0', 'BCC3', 'FBXO1', 'AC9')
 sim.genes.rna <- lapply(1:length(my.features), function(i){
   ind <- which(colnames(sc.rna.d) == my.features[i])
-  sim.genes <- quantile(sc.rna.d[ind, ], probs = 0.01)
+  sim.genes <- quantile(sc.rna.d[ind, ], probs = 0.02)
   sim.genes.ind <- which(sc.rna.d[ind, ] < sim.genes)
   colnames(sc.rna.d)[sim.genes.ind]
 })
@@ -115,7 +128,7 @@ sim.genes.rna <- lapply(1:length(my.features), function(i){
 
 sim.genes.atac <- lapply(1:length(my.features), function(i){
   ind <- which(colnames(sc.atac.d) == my.features[i])
-  sim.genes <- quantile(sc.atac.d[ind, ], probs = 0.1)
+  sim.genes <- quantile(sc.atac.d[ind, ], probs = 0.02)
   sim.genes.ind <- which(sc.atac.d[ind, ] < sim.genes)
   colnames(sc.atac.d)[sim.genes.ind]
 })
@@ -125,7 +138,7 @@ sim.genes.rna.atac <- lapply(1:length(my.features), function(i){
   intersect(sim.genes.rna[[i]], sim.genes.atac[[i]])
 })
 
-plot_rna_atac_trends_V2 <- function(genes){
+plot_rna_atac_trends_V2 <- function(genes, title = ''){
   sc.rna.atac.mu.scale.sub <- sc.rna.atac.mu.scale %>% dplyr::filter(GeneID %in% genes) %>% 
     pivot_longer(-c('time', "GeneID", "GeneID.y", "ProductDescription"), 
                  names_to = 'data', values_to = 'normExpr') 
@@ -159,7 +172,7 @@ plot_rna_atac_trends_V2 <- function(genes){
     facet_grid(.~data, scales = 'free', space = 'free') +
     
     
-    #ggtitle(titles[i]) +
+    ggtitle(title) +
     theme(
       plot.title = element_text(size=14, face = "bold.italic", color = 'red'),
       axis.title.x = element_text(size=14, face="bold", hjust = 1),
@@ -183,8 +196,8 @@ for(i in 1:length(sim.genes.rna.atac)){
     next
   }
   
-  p <- plot_rna_atac_trends_V2(sim.genes.rna.atac[[i]])
-  f.n <- paste("../Output/toxo_cdc/figures/IMC/clusters/", my.features[i], '.pdf', sep = '')
+  p <- plot_rna_atac_trends_V2(sim.genes.rna.atac[[i]], title = my.names[i])
+  f.n <- paste("../Output/toxo_cdc/figures/MNK1/", my.features[i], '.pdf', sep = '')
   ggsave(filename=f.n,
          plot=p,
          width = 8, height = 6,
@@ -192,7 +205,7 @@ for(i in 1:length(sim.genes.rna.atac)){
   )
   
   tab <- prod.desc %>% dplyr::filter(TGME49 %in% sim.genes.rna.atac[[i]])
-  f.n <- paste("../Output/toxo_cdc/figures/IMC/clusters/",my.features[i], '.xlsx', sep = '')
+  f.n <- paste("../Output/toxo_cdc/figures/MNK1/",my.features[i], '.xlsx', sep = '')
   write.xlsx(tab, f.n)
 }
 

@@ -26,240 +26,167 @@ num.cores <- detectCores(all.tests = FALSE, logical = TRUE)
 
 ## Fit a pseudo-time curve and align using sync data
 S.O.integrated <- readRDS('../Input/toxo_cdc/rds/S.O.intra_atac_integrated.rds')
+S.O.integrated@meta.data$Sample <- rownames(S.O.integrated@meta.data)
 Idents(S.O.integrated) <- 'orig.ident'
 
 atac_sub <- subset(S.O.integrated, ident = 'scATAC')
 rna_sub <- subset(S.O.integrated, ident = 'scRNA')
 
 
-## IDs
-prod.desc  <- read.xlsx('../Input/toxo_genomics/genes/ProductDescription_GT1.xlsx')
-TGGT1_ME49 <- read.xlsx('../Input/toxo_genomics/Orthologs/TGGT1_ME49 Orthologs.xlsx')
-prod.desc <- left_join(prod.desc, TGGT1_ME49, by = c('GeneID' = 'TGGT1'))
-
-
 ## Pseudo-time analysis with SLingshot
 
-fitTime <- function(S.O, method = 'rna'){
+fitTime <- function(S.O, method = 'rna', reverse.t = F){
   pc.tg <- getPCA(S.O)
   sds.data <- getPrinCurve(pc.tg)
-  pc.sds.tg <- left_join(pc.tg, sds.data, by = "Sample")
-  pc.sds.tg$phase <- S.O@meta.data$phase[match(pc.sds.tg$Sample, rownames(S.O@meta.data))]
-  pc.sds.tg$phase <- factor(pc.sds.tg$phase, levels = c('G1.a', 'G1.b', 'S', 'M', 'C'))
+  ind <- match(sds.data$Sample, pc.tg$Sample)
+  sds.data$PC_1 <- pc.tg$PC_1[ind]
+  sds.data$PC_2 <- pc.tg$PC_2[ind]
+  sds.data$phase <- S.O@meta.data$phase[match(sds.data$Sample, rownames(S.O@meta.data))]
+  sds.data$phase <- factor(sds.data$phase, levels = c('G1.a', 'G1.b', 'S', 'M', 'C'))
   
-  Y <- log2(S.O@assays$RNA@data + 1)
-  var.genes <- names(sort(apply(Y, 1, var),decreasing = TRUE))#[1:1000] 
-  Y <- Y[var.genes, ]
-  
+  Idents(S.O) <- 'phase'
+  DimPlot(S.O, reduction = 'pca', label = T)
+
+
   pt <- sds.data$pt
   
-  ## Map the pseudo-time to 0-6:20 hours 
-  #t <- (12 + 1/3) * ((as.numeric(pt) - min(as.numeric(pt)))/(max(as.numeric(pt)) - min(as.numeric(pt))))
-  t <- (6 + 1/6) * ((as.numeric(pt) - min(as.numeric(pt)))/(max(as.numeric(pt)) - min(as.numeric(pt))))
+  sds.data$pt <- 6 * ((as.numeric(pt) - min(as.numeric(pt)))/(max(as.numeric(pt)) - min(as.numeric(pt))))
   
-  sds.data$t <- t
+  plot(sds.data$phase, sds.data$pt)
   
-  ## Update pseudo-time to 0:6h
-  sds.data$pt <- t <- 6 * ((as.numeric(pt) - min(as.numeric(pt)))/(max(as.numeric(pt)) - min(as.numeric(pt))))
-  
-  ## time-index cells in 20 min intervals and identify cells in each partition
-  ## They will be considered as replicates
-  #time.breaks <- seq(1/3, 12 + 1/3, by = 1/3) 
-  time.breaks <- seq(1/6, 6 + 1/6, by = 1/6) 
-  time.idx <- rep(0, nrow(sds.data))
-  
-  ind <- which(sds.data$t <= time.breaks[1])
-  time.idx[ind] <- 0
-  
-  for(i in 2:length(time.breaks)){
-    ind <- which(sds.data$t > time.breaks[(i-1)] & sds.data$t <= time.breaks[i])
-    time.idx[ind] <- i - 1
+  if(reverse.t){
+    sds.data$pt <- 6 - sds.data$pt
   }
   
-  sds.data$time.idx <- time.idx
+  # Shift the time to start at G1.a
+  tmp <- sds.data %>% dplyr::filter(phase == 'G1.a') %>% arrange(pt)
+  lag.time <- tmp$pt[which.max((tmp$pt[2:length(tmp$pt)] - tmp$pt[1:(length(tmp$pt) - 1)])) + 1]
+  #lag.time <- quantile(tmp$pt, p = 0.205) ## excluse the ones overlapping with G1.b
   
-  ## Update the time to 20 min increments
-  #sds.data$t <- (time.idx) * (1/3)
-  sds.data$t <- (time.idx) * (1/6)
-  
-  # sds.data <- sds.data %>%  
-  #   group_by(time.idx) %>% mutate(rep = seq(1:n()))
-  # 
-  # rownames(sds.data) <- sds.data$Sample
-  
-  
-  
-  ## Run a GAM regression of expression on the pseudo-time
-  ## Use parallel computation to speed things up. 16 cores
-  gam.pval <- mclapply(1:nrow(Y), function(z){
-    d <- data.frame(z=as.numeric(Y[z,]), t=as.numeric(pt))
-    tmp <- gam(z ~ lo(t), data=d)
-    #p <- summary(tmp)[4][[1]][1,5]
-    p <- summary(tmp)$anova$`Pr(F)`[2]
-    p
-  }, mc.cores = num.cores)
-  
-  gam.pval <- unlist(gam.pval)
-  names(gam.pval) <- rownames(Y)
-  ## Remove the NA's and get the best fits
-  if(any(is.na(gam.pval))){
-    gam.pval <- gam.pval[-which(is.na(gam.pval))]
-  }
-  
-  gam.pval.adj <- p.adjust(gam.pval, method = 'fdr', n = length(gam.pval))
-  gam.pval.sig <- gam.pval[gam.pval.adj < 0.01] 
-  print(length(gam.pval.sig)) ## number of correlating genes
-  
-  ## Sort the cells on the pt
-  cell.ord <- sds.data$cell.ord
-  
-  topgenes <- names(sort(gam.pval.sig, decreasing = FALSE))  
-  cell.cycle.genes.expr <- as.matrix(S.O@assays$RNA@data[topgenes, cell.ord])
-  #cell.cycle.genes.expr <- as.matrix(S.O.bd.filt@assays$smooth@data[topgenes, cell.ord]) ## smoothed version
-  
-  
-  cell.cycle.genes.df <- data.frame(GeneID = rownames(cell.cycle.genes.expr),
-                                    cell.cycle.genes.expr) %>% 
-    pivot_longer(-c(GeneID), names_to = 'Sample', values_to = 'log2.expr')
-  
-  if(method == 'atac'){
-    cell.cycle.genes.df$Sample <- gsub('\\.', '-', cell.cycle.genes.df$Sample)
-  }
-  
-  cell.cycle.genes.df$GeneID <- gsub('-', '_', cell.cycle.genes.df$GeneID)
-  #cell.cycle.genes.df <- left_join(cell.cycle.genes.df, sds.data, by = 'Sample')
-  cell.cycle.genes.df$cluster <- S.O@meta.data$seurat_clusters[match(cell.cycle.genes.df$Sample, 
-                                                                        rownames(S.O@meta.data))]
-  
-  cell.cycle.genes.df$phase <- S.O@meta.data$phase[match(cell.cycle.genes.df$Sample, 
-                                                            rownames(S.O@meta.data))]
-  cell.cycle.genes.df$phase <- factor(cell.cycle.genes.df$phase, 
-                                      levels = c('G1.a', 'G1.b', 'S', 'M', 'C'))
-  
-  
-  
-  tmp <- left_join(cell.cycle.genes.df, sds.data, by = 'Sample')
-  start.times <- tmp %>% group_by(GeneID) %>% arrange(phase, pt) %>% summarise(st = t[1])
-  lag.time <- which(sort(unique(tmp$t)) == unique(start.times$st)) + 2 ## all are the same
-  
-  print(paste('lag time:', lag.time))
-  
-  
-  adjusted.time <- (sds.data$time.idx * 1/6) -  sort(unique(sds.data$time.idx) * 1/6)[lag.time]
-  neg.ind <- ifelse(adjusted.time < 0, T, F)
-  adjusted.time[neg.ind] <- adjusted.time[neg.ind] + (6 + 1/6)
-  sds.data$adj.time <-  adjusted.time
-  
-  
-  start.times <- tmp %>% group_by(GeneID) %>% arrange(phase, pt) %>% summarise(spt = pt[1])
-  lag.time <- which(sort(unique(tmp$pt)) == unique(start.times$spt))
-  
-  adjusted.pstime <- sds.data$pt -  sort(unique(sds.data$pt))[lag.time]
-  neg.ind <- ifelse(adjusted.pstime < 0, T, F)
-  adjusted.pstime[neg.ind] <- adjusted.pstime[neg.ind] + 6
-  sds.data$adj.pt <-  adjusted.pstime
-  
-  
-  ## create fine-resolution 20 min cluster of cells
-  clusters <- paste('C', 1:length(unique(sds.data$adj.time)), sep = '')
-  sds.data$cluster <- clusters[as.integer((sds.data$adj.time) * 6 + 1)]
-  
-  
-  ## Updat time index
-  time.breaks <- seq(1/6, 6 + 1/6, by = 1/6) 
-  time.idx <- rep(0, nrow(sds.data))
-  
-  ind <- which(sds.data$adj.time <= time.breaks[1])
-  time.idx[ind] <- 0
-  
-  for(i in 2:length(time.breaks)){
-    ind <- which(sds.data$adj.time > time.breaks[(i-1)] & sds.data$adj.time <= time.breaks[i])
-    time.idx[ind] <- i - 1
-  }
-  
-  sds.data$adj.time.idx <- time.idx
+  sds.data$pt <- (sds.data$pt - lag.time + 6) %% 6
   
 
+  plot(sds.data$phase, sds.data$pt)
   
-  sds.data <- sds.data %>%  ungroup() %>%
-    group_by(adj.time.idx) %>% mutate(rep = seq(1:n()))
+ 
+  ind.G1.a <- which(sds.data$phase == 'G1.a')
+  ind.G1.b <- which(sds.data$phase == 'G1.b')
+  ind.S <- which(sds.data$phase == 'S')
+  ind.M <- which(sds.data$phase == 'M')
+  ind.C <- which(sds.data$phase == 'C')
   
+  
+  L <- wiskerPlot(S.O)
+
+  par(mar = c(5, 5, 4, 4) + 0.1)
+  plot(x = -35:10, y = -25:20, type = 'n', xlab = 'PC1', ylab = 'PC2',  lwd = 2, cex.lab = 1.5, cex.main = 2, cex.axis = 1.5)
+  whiskers(as.matrix(L$pc[,c(1,2)]), L$fit$s, col = "gray")
+  points(sds.data$PC_1, sds.data$PC_2, cex = 0.6, col = sds.data$phase, pch = 20)
+  points(sds.data$sc1[sds.data$cell.ord],sds.data$sc2[sds.data$cell.ord], cex = 0.2, col = 'red')
+
+  
+  # Scale the pt based on know biology: Radke et. al 2000
+  G <- c(0, 3) # 3h
+  S <- c(3, 4.7) # 1.7h
+  M <- c(4.7, 5) # ~20 min
+  C <- c(5, 6) # 1h
+  
+  t1 <- (quantile(sds.data$pt[ind.G1.a], prob=0.75) + 
+    quantile(sds.data$pt[ind.G1.b], prob=0.25))/2 ## Start of G1.b
+  t2 <- (quantile(sds.data$pt[ind.G1.b], prob=0.75) + 
+    quantile(sds.data$pt[ind.S], prob=0.25)) / 2 ## End of G1.b, Start of S
+  t3 <- (quantile(sds.data$pt[ind.S], prob=0.75) + 
+    quantile(sds.data$pt[ind.M], prob=0.25)) / 2## End of S, Start of M
+  t4 <- (quantile(sds.data$pt[ind.M], prob=0.75) + 
+    quantile(sds.data$pt[ind.C], prob=0.25)) / 2## End of M, Start of C
+
+  t0 <- 0
+  t5 <- 6
+  
+  # sds.data$pt.shift <- (sds.data$pt + t.shift) %% 6
+  # sds.data$pt.shift <- 6 * ((sds.data$pt.shift - min(sds.data$pt.shift)) / 
+  #                             (max(sds.data$pt.shift) - min(sds.data$pt.shift)))
+  # plot(sds.data$phase, sds.data$pt.shift)
+  
+  slp.g <- (G[2] - G[1]) / (t2 - t0)
+  inc.g  <- c(t0, G[1])
+  
+  slp.s <- (S[2] - S[1]) / (t3 - t2)
+  inc.s  <- c(t2, S[1])
+  
+  slp.m <- (M[2] - M[1]) / (t4 - t3)
+  inc.m  <- c(t3, M[1])
+  
+  slp.c <- (C[2] - C[1]) / (t5 - t4)
+  inc.c  <- c(t4, C[1])
+  
+  sds.data <- sds.data %>%  
+    mutate(pt.shifted.scaled = case_when(phase %in% c('G1.a', 'G1.b') ~ inc.g[2] + slp.g * (pt - inc.g[1]),
+                                         phase == 'S' ~ inc.s[2] + slp.s * (pt - inc.s[1]),
+                                         phase == 'M' ~ inc.m[2] + slp.m * (pt - inc.m[1]),
+                                         phase == 'C' ~ inc.c[2] + slp.c * (pt - inc.c[1])))
+  
+  plot(sds.data$phase, sds.data$pt.shifted.scaled)
+  
+  ## Exclude outlier samples
+  #q.ex <- quantile(sds.data$pt.shifted.scaled, p = 0.998)
+  q.ex <- 7
+  sds.data <- sds.data %>% dplyr::filter(pt.shifted.scaled <= q.ex)
+  ## Rescale to [0, 6]
+  sds.data$pt.shifted.scaled <- 6 * ((sds.data$pt.shifted.scaled - min(sds.data$pt.shifted.scaled))/
+                                       (max(sds.data$pt.shifted.scaled) - min(sds.data$pt.shifted.scaled)))
+  plot(sds.data$phase, sds.data$pt.shifted.scaled)
+  # plot(sort(sds.data$pt.shifted.scaled))
+  # 
+
+  S.O.filt <- S.O
+  S.O.filt@meta.data$Sample <- rownames(S.O.filt@meta.data)
+  Idents(S.O.filt) <- 'Sample'
+  S.O.filt <- subset(S.O.filt, idents = sds.data$Sample)
+
+
+  genes.expr <- as.matrix(S.O.filt@assays$RNA@data)
+  #genes.expr <- as.matrix(S.O@assays$RNA@data)
+  
+
+  genes.df <- data.frame(GeneID = rownames(genes.expr),
+                                    genes.expr) %>%
+    pivot_longer(-c(GeneID), names_to = 'Sample', values_to = 'log2.expr')
+
+  if(method == 'atac'){
+    genes.df$Sample <- gsub('\\.', '-', genes.df$Sample)
+  }
+
+  genes.df <- inner_join(genes.df, sds.data, by = 'Sample')
+ 
   sds.data <- as.data.frame(sds.data)
   rownames(sds.data) <- sds.data$Sample
   
   ## Add the new clusters as meta-data
-  S.O <- AddMetaData(S.O, sds.data)
+  S.O.filt <- AddMetaData(S.O.filt, sds.data)
+  #S.O <- AddMetaData(S.O, sds.data)
+
+  L <- list(sds.data = sds.data, genes.df = genes.df,
+            S.O = S.O.filt)
   
-  pc <- S.O[['pca']]@cell.embeddings
-  pc <- data.frame(pc) %>% dplyr::mutate(Sample = rownames(pc))
-  pc$cluster <- S.O$cluster
-  
-  
-  
-  pc.sds.adj <- left_join(pc, sds.data, by = "Sample")
-  
-  lvs <- paste('C', unique(sort(as.numeric(gsub('C', '', pc.sds.adj$cluster.y)))), sep = '')
-  pc.sds.adj$cluster.y <- factor(pc.sds.adj$cluster.y, levels = lvs)
-  
-  
-  cell.cycle.genes.df.adj <- left_join(cell.cycle.genes.df, sds.data[,c('Sample','adj.pt', 'adj.time', 
-                                                                        'adj.time.idx', 
-                                                                        'rep', 'cluster')], by = 'Sample')
-  sc.tc.df.adj <- cell.cycle.genes.df.adj %>% 
-    transmute(y = log2.expr, tme = adj.time, ind = rep, variable = GeneID)
-  
-  L <- list(cell.cycle.genes.df = cell.cycle.genes.df, 
-            cell.cycle.genes.df.adj = cell.cycle.genes.df.adj,
-            sc.tc.df.adj = sc.tc.df.adj,
-            sds.data = sds.data,
-            S.O = S.O,
-            gam.genes = names(gam.pval.sig))
   return(L)
 }
 
 
 DefaultAssay(atac_sub) <- 'RNA'
-L.atac <- fitTime(atac_sub, 'atac')
+L.atac <- fitTime(atac_sub, 'atac', reverse.t = T)
 
 DefaultAssay(rna_sub) <- 'RNA'
-L.rna <- fitTime(rna_sub)
+L.rna <- fitTime(rna_sub, 'rna', reverse.t = T)
 
 
-## Scale the pt based on know biology: Radke et. al 2000
-scalePT <- function(pt.phase){
-  G <- c(0, 3) # 3h
-  S <- c(3, 4.7) # 1.7h
-  M <- c(4.7, 5) # ~20 min
-  C <- c(5, 6) # 1h
-  
-  G.adj.pt <- c(min(pt.phase$pt[pt.phase$phase %in% c('G1.a', 'G1.b')]),
-                max(pt.phase$pt[pt.phase$phase %in% c('G1.a', 'G1.b')]))
-  
-}
+saveRDS(L.rna$genes.df, '../Input/toxo_cdc/rds/sc_rna_genes_expr_pt.rds')
+saveRDS(L.atac$genes.df, '../Input/toxo_cdc/rds/sc_atac_genes_expr_pt.rds')
 
+saveRDS(L.rna$sds.data, '../Input/toxo_cdc/rds/sc_rna_sds_data.rds')
+saveRDS(L.atac$sds.data, '../Input/toxo_cdc/rds/sc_atac_sds_data.rds')
 
+saveRDS(L.rna$S.O, '../Input/toxo_cdc/rds/S.O_intra_lables_pt.rds')
+saveRDS(L.atac$S.O, '../Input/toxo_cdc/rds/S.O_intra_atac_lables_pt.rds')
 
-saveRDS(L.atac$cell.cycle.genes.df.adj, '../Input/toxo_cdc/rds/atac_seq_gene_access_pseudo_time.rds')
-saveRDS(L.rna$cell.cycle.genes.df.adj, '../Input/toxo_cdc/rds/rna_seq_gene_expr_pseudo_time.rds')
-
-
-# Scale the pt based on know biology: Radke et. al 2000
-scalePT <- function(pt.phase){
-  G <- c(0, 3) # 3h
-  S <- c(3, 4.7) # 1.7h
-  M <- c(4.7, 5) # ~20 min
-  C <- c(5, 6) # 1h
-  
-  G.adj.pt <- c(min(pt.phase$pt[pt.phase$phase %in% c('G1.a', 'G1.b')]),
-                max(pt.phase$pt[pt.phase$phase %in% c('G1.a', 'G1.b')]))
-  
-}
-
-pt.phase <- sc.rna.cell.cycle.genes.df.adj %>% transmute(Sample = Sample, pt = adj.pt, phase = phase) %>% distinct()
-
-par(mfrow = c(4,1))
-plot(pt.phase$pt[pt.phase$phase %in% c('G1.a', 'G1.b')])
-plot(pt.phase$pt[pt.phase$phase == 'S'])
-plot(pt.phase$pt[pt.phase$phase == 'M'])
-plot(pt.phase$pt[pt.phase$phase == 'C'])
 

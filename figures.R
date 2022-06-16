@@ -25,7 +25,7 @@ getPcaMetaData <- function(S.O){
     transmute(Sample = Sample, UMAP_1 = UMAP_1, UMAP_2 = UMAP_2)
   
   meta.data <- data.frame(Sample = rownames(S.O@meta.data), 
-                          spp = S.O@meta.data$spp, phase = S.O@meta.data$phase)
+                          spp = S.O@meta.data$spp, phase = S.O@meta.data$phase, transition = S.O@meta.data$transition.atac)
   meta.data <- left_join(meta.data,
                          pc, by = 'Sample')
   meta.data <- left_join(meta.data, umap, by = 'Sample')
@@ -33,12 +33,14 @@ getPcaMetaData <- function(S.O){
 }
 
 
-## Fit a pseudo-time curve and align using sync data
-S.O.integrated <- readRDS('../Input/toxo_cdc/rds/S.O.intra_atac_integrated.rds')
-Idents(S.O.integrated) <- 'orig.ident'
 
-atac_sub <- subset(S.O.integrated, ident = 'scATAC')
-rna_sub <- subset(S.O.integrated, ident = 'scRNA')
+# rna_sub <- readRDS('../Input/toxo_cdc/rds/S.O_intra_lables_pt.rds')
+# atac_sub <- readRDS('../Input/toxo_cdc/rds/S.O_intra_atac_lables_pt.rds')
+
+
+## With Transition maps
+rna_sub  <- readRDS('../Input/toxo_cdc/rds/S.O.intra_rna_atac_trnasition.rds')
+atac_sub <- readRDS('../Input/toxo_cdc/rds/S.O.intra_atac_atac_trnasition.rds')
 
 rna_sub.pca <- getPcaMetaData(rna_sub)
 
@@ -75,10 +77,10 @@ p1  <- ggplot(rna_sub.pca, aes(x= PC_1,y=PC_2)) +
   ) + 
   theme(#legend.position = c(0.15, 0.85),
     legend.position = 'none',
-        legend.title = element_text(colour="black", size=12, 
-                                    face="bold"),
-        legend.text = element_text(colour="black", size=12, 
-                                   face="bold"))
+    legend.title = element_text(colour="black", size=12, 
+                                face="bold"),
+    legend.text = element_text(colour="black", size=12, 
+                               face="bold"))
 
 
 plot(p1)
@@ -98,6 +100,54 @@ p2  <- ggplot(atac_sub.pca, aes(x= PC_1,y=PC_2)) +
   geom_point(aes(#fill = lable.prob,
     fill = phase,
     color = phase, 
+  ), #color = 'blue', 
+  alpha = 0.4,
+  shape=21, size = 1)+ 
+  # scale_color_manual(values = c("BBig" = "firebrick","BBov" ="darkorchid3", 'BDiv_Cow' = 'darkslateblue', 
+  #                               'BDiv_Human' = 'darkolivegreen4')) +
+  # scale_fill_manual(values = c("BBig" = "firebrick","BBov" ="darkorchid3", 'BDiv_Cow' = 'darkslateblue', 
+  #                              'BDiv_Human' = 'darkolivegreen4')) +
+  
+  theme_bw(base_size = 14) +
+  theme(legend.position = "right") +
+  #scale_fill_gradientn(colours = viridis::inferno(10)) +
+  #scale_fill_gradientn(colours = col_range(10)) +
+  #scale_fill_gradient(low = "gray66", high = "blue", midpoint = mid_point) + 
+  #scale_fill_brewer(palette = "BuPu") +
+  ylab('') + xlab('PC2') +
+  theme(axis.text.x = element_text(angle = 0, hjust = 1, size = 12, face="bold")) +
+  theme(axis.text.y = element_text(angle = 0, hjust = 1, size = 12, face="bold")) +
+  theme(strip.background = element_rect(colour="black", fill="white",
+                                        size=0.5, linetype="solid")) +
+  #facet_wrap(spp~.) + 
+  #ggtitle(titles[i]) +
+  theme(
+    plot.title = element_text(size=14, face = "bold.italic", color = 'red'),
+    axis.title.x = element_text(size=14, face="bold", hjust = 1),
+    axis.title.y = element_text(size=14, face="bold")
+  ) + 
+  theme(#legend.position = c(0.15, 0.85),
+    legend.position = 'none',
+    legend.title = element_text(colour="black", size=12, 
+                                face="bold"),
+    legend.text = element_text(colour="black", size=12, 
+                               face="bold"))
+
+
+plot(p2)
+
+ggsave(filename="../Output/toxo_cdc/figures/pca_atac.pdf",
+       plot=p2,
+       width = 6, height = 6,
+       units = "in"
+)
+
+
+
+p3  <- ggplot(rna_sub.pca, aes(x= PC_1,y=PC_2)) +
+  geom_point(aes(#fill = lable.prob,
+    fill = transition,
+    color = transition, 
   ), #color = 'blue', 
   alpha = 0.4,
   shape=21, size = 1)+ 
@@ -132,27 +182,38 @@ p2  <- ggplot(atac_sub.pca, aes(x= PC_1,y=PC_2)) +
                                face="bold"))
 
 
-plot(p2)
+plot(p3)
 
-ggsave(filename="../Output/toxo_cdc/figures/pca_atac.pdf",
-       plot=p2,
+ggsave(filename="../Output/toxo_cdc/figures/pca_rna_transition.pdf",
+       plot=p3,
        width = 6, height = 6,
        units = "in"
 )
 
 
-## Cell cycle Markers
-Intra.markers.sig <- readRDS('../Input/toxo_cdc/rds/Intra_markers_sig.rds')
 
-ss <- Intra.markers.sig %>% group_by(cluster) %>% summarise(num.DEG = n())
-ss$cluster <- factor(ss$cluster, levels = c('G1.a', 'G1.b', 'S', 'M', 'C'))
-p <- ggplot(data=ss, aes(x=cluster, y=num.DEG, fill=cluster)) +
-  geom_bar(stat="identity")+
-  geom_text(aes(label=num.DEG), vjust=1.6, color="black", size=5, fontface="bold")+
-  theme_minimal() + 
-  ylab('') + xlab('') +
-  theme(axis.text.x = element_text(angle = 0, hjust = 1, size = 14, face="bold")) +
-  theme(axis.text.y = element_text(angle = 0, hjust = 1, size = 14, face="bold")) +
+
+p4  <- ggplot(atac_sub.pca, aes(x= PC_1,y=PC_2)) +
+  geom_point(aes(#fill = lable.prob,
+    fill = transition,
+    color = transition, 
+  ), #color = 'blue', 
+  alpha = 0.4,
+  shape=21, size = 1)+ 
+  # scale_color_manual(values = c("BBig" = "firebrick","BBov" ="darkorchid3", 'BDiv_Cow' = 'darkslateblue', 
+  #                               'BDiv_Human' = 'darkolivegreen4')) +
+  # scale_fill_manual(values = c("BBig" = "firebrick","BBov" ="darkorchid3", 'BDiv_Cow' = 'darkslateblue', 
+  #                              'BDiv_Human' = 'darkolivegreen4')) +
+  
+  theme_bw(base_size = 14) +
+  theme(legend.position = "right") +
+  #scale_fill_gradientn(colours = viridis::inferno(10)) +
+  #scale_fill_gradientn(colours = col_range(10)) +
+  #scale_fill_gradient(low = "gray66", high = "blue", midpoint = mid_point) + 
+  #scale_fill_brewer(palette = "BuPu") +
+  ylab('') + xlab('PC2') +
+  theme(axis.text.x = element_text(angle = 0, hjust = 1, size = 12, face="bold")) +
+  theme(axis.text.y = element_text(angle = 0, hjust = 1, size = 12, face="bold")) +
   theme(strip.background = element_rect(colour="black", fill="white",
                                         size=0.5, linetype="solid")) +
   #facet_wrap(spp~.) + 
@@ -170,59 +231,98 @@ p <- ggplot(data=ss, aes(x=cluster, y=num.DEG, fill=cluster)) +
                                face="bold"))
 
 
+plot(p4)
+
+ggsave(filename="../Output/toxo_cdc/figures/pca_atac_transiiton.pdf",
+       plot=p4,
+       width = 6, height = 6,
+       units = "in"
+)
+
+## Cell cycle Markers
+Intra.markers.sig <- readRDS('../Input/toxo_cdc/rds/Intra_markers_sig.rds')
+
+ss <- Intra.markers.sig %>% group_by(cluster) %>% summarise(num.DEG = n())
+ss$cluster <- factor(ss$cluster, levels = c('G1.a', 'G1.b', 'S', 'M', 'C'))
+p <- ggplot(data=ss, aes(x=cluster, y=num.DEG, fill=cluster)) +
+  geom_bar(stat="identity")+
+  geom_text(aes(label=num.DEG), vjust=1.6, color="black", size=5, fontface="bold")+
+  theme_minimal() + 
+  ylab('') + xlab('') +
+  theme(axis.text.x = element_text(angle = 0, hjust = 1, size = 16, face="bold")) +
+  theme(axis.text.y = element_text(angle = 0, hjust = 1, size = 16, face="bold")) +
+  theme(strip.background = element_rect(colour="black", fill="white",
+                                        size=0.5, linetype="solid")) +
+  #facet_wrap(spp~.) + 
+  #ggtitle(titles[i]) +
+  theme(
+    plot.title = element_text(size=18, face = "bold.italic", color = 'red'),
+    axis.title.x = element_text(size=18, face="bold", hjust = 1),
+    axis.title.y = element_text(size=18, face="bold")
+  ) + 
+  theme(#legend.position = c(0.15, 0.85),
+    legend.position = 'none',
+    legend.title = element_text(colour="black", size=12, 
+                                face="bold"),
+    legend.text = element_text(colour="black", size=12, 
+                               face="bold"))
+
+
 plot(p)
 
 ggsave(filename="../Output/toxo_cdc/figures/tg_Intra_deg_numbers.pdf",
        plot=p,
-       width = 8, height = 6,
+       width = 6, height = 6,
        units = "in", # other options are "in", "cm", "mm"
        dpi = 300
 )
 
 
 ## Enrichment
-e.a <- readRDS('../Input/toxo_cdc/enrichment_cell_cycle_markers.rds')
+e.a.atac.trans <- read.xlsx('../Output/toxo_cdc/tabels/GO_toxo_db_atact_transition_points_sig_KZ.xlsx')
 
-e.a.sig <- e.a %>% dplyr::filter(qval <= 0.1) %>% arrange(qval)
+e.a.atac.trans <- e.a.atac.trans %>% dplyr::filter(Benjamini <= 0.1 & rank < 30) %>% arrange(Benjamini)
 
-e.a.sig$GO.name2 <- gsub("transport", "trans.",
-                         gsub("obsolete oxidation-reduction", "obs. ox-reduc.",
-                         gsub("symbiont-containing", "symb.-cont.", 
-                              gsub("membrane", "mem.",
-                         gsub("biosynthetic", "biosynth.", 
-                         gsub("phosphorylation", "phosph.",
-                         gsub("activity", "act.",
-                         gsub("aminoacylation for prot. translation", "aa prot. trans.",
-                         gsub("synthesis coupled", "synth. coup.", 
-                         gsub("heterodimerization", "hetero.dim", 
-                         gsub("protein", "prot.", 
-                         gsub("process", "proc.", 
-                         gsub("cellular", "cell.", 
-                         gsub("aminoacyl-tRNA ", "aa-tRNA ",
-                         gsub("complex", "comp.", 
-                         gsub("threonine-type ", "", 
-                         gsub("proteolysis involved in cellular protein catabolic process", "proteolysis/catabolic proc.",
-                         gsub(", alpha-subunit complex", "", e.a.sig$GO.name))))))))))))))))))
+# e.a.sig$GO.name2 <- gsub("transport", "trans.",
+#                          gsub("obsolete oxidation-reduction", "obs. ox-reduc.",
+#                               gsub("symbiont-containing", "symb.-cont.", 
+#                                    gsub("membrane", "mem.",
+#                                         gsub("biosynthetic", "biosynth.", 
+#                                              gsub("phosphorylation", "phosph.",
+#                                                   gsub("activity", "act.",
+#                                                        gsub("aminoacylation for prot. translation", "aa prot. trans.",
+#                                                             gsub("synthesis coupled", "synth. coup.", 
+#                                                                  gsub("heterodimerization", "hetero.dim", 
+#                                                                       gsub("protein", "prot.", 
+#                                                                            gsub("process", "proc.", 
+#                                                                                 gsub("cellular", "cell.", 
+#                                                                                      gsub("aminoacyl-tRNA ", "aa-tRNA ",
+#                                                                                           gsub("complex", "comp.", 
+#                                                                                                gsub("threonine-type ", "", 
+#                                                                                                     gsub("proteolysis involved in cellular protein catabolic process", "proteolysis/catabolic proc.",
+#                                                                                                          gsub(", alpha-subunit complex", "", e.a.sig$GO.name))))))))))))))))))
+# 
+# e.a.sig <- e.a.sig %>% mutate(GO.t = as.factor(GO.name2),
+#                               name = reorder_within(GO.name2, by = qval, within = category))
 
-e.a.sig <- e.a.sig %>% mutate(GO.t = as.factor(GO.name2),
-       name = reorder_within(GO.name2, by = qval, within = category))
-p1 <- ggplot(e.a.sig, aes(x = cluster, y = GO.t)) + 
-  geom_point(aes(color = pvalue, size = -log(pvalue))) +
+e.a.atac.trans$Name <- factor(e.a.atac.trans$Name, levels = unique(e.a.atac.trans$Name[sort(e.a.atac.trans$Benjamini, index.return = T)$ix]))
+p1 <- ggplot(e.a.atac.trans, aes(x = cluster, y = Name)) + 
+  geom_point(aes(color = Benjamini, size = -log(Benjamini))) +
   theme_bw(base_size = 12) +
   scale_colour_gradient(limits=c(0, 0.01), low="red") +
   ylab(NULL) + xlab(NULL) +
-  facet_grid(category~., scales='free') + 
-  theme(strip.text = element_text(size = 14, face="bold", angle = 90)) + 
-  theme(axis.text.x = element_text(angle = 45, hjust = 1, size = 14, face="bold")) +
-  theme(axis.text.y = element_text(angle = 0, hjust = 1, size = 14, face="bold")) +
+  #facet_grid(category~., scales='free') + 
+  theme(strip.text = element_text(size = 12, face="bold", angle = 90)) + 
+  theme(axis.text.x = element_text(angle = 45, hjust = 1, size = 8, face="bold")) +
+  theme(axis.text.y = element_text(angle = 0, hjust = 1, size = 8, face="bold")) +
   theme(strip.background = element_rect(colour="black", fill="white",
                                         size=0.5, linetype="solid")) +
   #facet_wrap(spp~.) + 
   #ggtitle(titles[i]) +
   theme(
-    plot.title = element_text(size=14, face = "bold.italic", color = 'red'),
-    axis.title.x = element_text(size=14, face="bold", hjust = 1),
-    axis.title.y = element_text(size=14, face="bold")
+    plot.title = element_text(size=10, face = "bold.italic", color = 'red'),
+    axis.title.x = element_text(size=10, face="bold", hjust = 1),
+    axis.title.y = element_text(size=10, face="bold")
   ) + 
   theme(#legend.position = c(0.15, 0.85),
     #legend.position = 'none',
@@ -232,12 +332,53 @@ p1 <- ggplot(e.a.sig, aes(x = cluster, y = GO.t)) +
                                face="bold"))
 
 
-  
+
 plot(p1)
 
-ggsave(filename="../Output/toxo_cdc/figures/enrichment_cell_cycle_markers.pdf",
+ggsave(filename="../Output/toxo_cdc/figures/enrichment_atac_transition.pdf",
        plot=p1,
-       width = 7, height = 8,
+       width = 6, height = 10,
+       units = "in", # other options are "in", "cm", "mm"
+       dpi = 300
+)
+
+
+e.a.phase <- read.xlsx('../Output/toxo_cdc/tabels/GO_toxo_db_phases_sig_KZ.xlsx')
+
+e.a.phase$cluster <- factor(e.a.phase$cluster, levels = c('G1.a', 'G1.b', 'S', 'M', 'C'))
+e.a.phase$Name <- factor(e.a.phase$Name, levels = unique(e.a.phase$Name[sort(e.a.phase$Benjamini, index.return = T)$ix]))
+p2 <- ggplot(e.a.phase, aes(x = cluster, y = Name)) + 
+  geom_point(aes(color = Benjamini, size = -log(Benjamini))) +
+  theme_bw(base_size = 12) +
+  scale_colour_gradient(limits=c(0, 0.01), low="red") +
+  ylab(NULL) + xlab(NULL) +
+  #facet_grid(category~., scales='free') + 
+  theme(strip.text = element_text(size = 12, face="bold", angle = 90)) + 
+  theme(axis.text.x = element_text(angle = 45, hjust = 1, size = 8, face="bold")) +
+  theme(axis.text.y = element_text(angle = 0, hjust = 1, size = 8, face="bold")) +
+  theme(strip.background = element_rect(colour="black", fill="white",
+                                        size=0.5, linetype="solid")) +
+  #facet_wrap(spp~.) + 
+  #ggtitle(titles[i]) +
+  theme(
+    plot.title = element_text(size=10, face = "bold.italic", color = 'red'),
+    axis.title.x = element_text(size=10, face="bold", hjust = 1),
+    axis.title.y = element_text(size=10, face="bold")
+  ) + 
+  theme(#legend.position = c(0.15, 0.85),
+    #legend.position = 'none',
+    legend.title = element_text(colour="black", size=12, 
+                                face="bold"),
+    legend.text = element_text(colour="black", size=12, 
+                               face="bold"))
+
+
+
+plot(p2)
+
+ggsave(filename="../Output/toxo_cdc/figures/enrichment_cell_cycle_markers.pdf",
+       plot=p2,
+       width = 6, height = 10,
        units = "in", # other options are "in", "cm", "mm"
        dpi = 300
 )
@@ -249,7 +390,7 @@ sc.atac.genes.expr.pt <- readRDS('../Input/toxo_cdc/rds/sc_atac_genes_expr_pt.rd
 
 
 S.O.rna  <- readRDS('../Input/toxo_cdc/rds/S.O_intra_lables_pt.rds')
-S.O.atac <- readRDS('../Input/toxo_cdc/rds/S.O_atac_lables_pt.rds')
+S.O.atac <- readRDS('../Input/toxo_cdc/rds/S.O_intra_atac_lables_pt.rds')
 
 rna.sds.data <- readRDS('../Input/toxo_cdc/rds/sc_rna_sds_data.rds')
 atac.sds.data <- readRDS('../Input/toxo_cdc/rds/sc_atac_sds_data.rds')
@@ -262,7 +403,7 @@ pdf(file="../Output/toxo_cdc/figures/whiskers_rna.pdf",
 
 
 par(mar = c(5, 5, 4, 4) + 0.1)
-plot(x = -35:10, y = -25:20, type = 'n', xlab = 'PC1', ylab = 'PC2',  
+plot(x = -35:10, y = -25:20, type = 'n', xlab = '', ylab = '',  xaxt = "n", yaxt = "n", axes=FALSE,
      lwd = 2, cex.lab = 1.5, cex.main = 2, cex.axis = 1.5)
 whiskers(as.matrix(L$pc[,c(1,2)]), L$fit$s, col = "gray")
 color = rep(NA, length=length(rna.sds.data$phase))
@@ -273,6 +414,9 @@ color[which(rna.sds.data$phase=="M")] = "#04b0f6"
 color[which(rna.sds.data$phase=="C")] = "#e76bf3"
 points(rna.sds.data$PC_1, rna.sds.data$PC_2, cex = 0.5, col = color, pch = 20)
 points(rna.sds.data$sc1[rna.sds.data$cell.ord],rna.sds.data$sc2[rna.sds.data$cell.ord], cex = 0.2, col = 'red')
+# grid(nx = NULL, ny = NULL,
+#      lty = 1, col = "gray", lwd = 1)
+# 
 
 dev.off()
 
@@ -284,7 +428,7 @@ pdf(file="../Output/toxo_cdc/figures/whiskers_atac.pdf",
 
 
 par(mar = c(5, 5, 4, 4) + 0.1)
-plot(x = -35:10, y = -25:20, type = 'n', xlab = 'PC1', ylab = 'PC2',  
+plot(x = -35:10, y = -25:20, type = 'n',  xlab = '', ylab = '',  xaxt = "n", yaxt = "n", axes=FALSE,  
      lwd = 2, cex.lab = 1.5, cex.main = 2, cex.axis = 1.5)
 whiskers(as.matrix(L$pc[,c(1,2)]), L$fit$s, col = "gray")
 color = rep(NA, length=length(atac.sds.data$phase))
@@ -312,7 +456,7 @@ picewise_scale <- function(sds.data){
   ind.M <- which(sds.data$phase == 'M')
   ind.C <- which(sds.data$phase == 'C')
   
-  t <- sds.data$pt.shift
+  t <- sds.data$pt
   
   t0 <- 0
   t1 <- quantile(t[ind.G1.b], prob=0.25) ## Start of G1.b
@@ -346,7 +490,7 @@ picewise_scale <- function(sds.data){
                                       pt >= t2 & pt < t3 ~ inc.s[2] + slp.s * (pt - inc.s[1]),
                                       pt >= t3 & pt < t4 ~ inc.m[2] + slp.m * (pt - inc.m[1]),
                                       pt >= t4 ~ inc.c[2] + slp.c * (pt - inc.c[1])))
-
+  
   return(s.t)
 }
 
@@ -383,6 +527,13 @@ p1  <- ggplot(rna.s.t, aes(x= pt,y=t)) +
   geom_segment(aes(x = 0, y = t[phase == 'C'][1], 
                    xend = pt[phase == 'C'][1], 
                    yend = t[phase == 'C'][1]), linetype=2, color = 'black') +
+  geom_segment(aes(x = 6, y = 0, 
+                   xend = 6, 
+                   yend = 6), linetype=2, color = 'black') +
+  geom_segment(aes(x = 0, y = 6, 
+                   xend = 6, 
+                   yend = 6), linetype=2, color = 'black') +
+  
   
   theme_bw(base_size = 14) +
   theme(legend.position = "right") +
@@ -391,8 +542,8 @@ p1  <- ggplot(rna.s.t, aes(x= pt,y=t)) +
   #scale_fill_gradient(low = "gray66", high = "blue", midpoint = mid_point) + 
   #scale_fill_brewer(palette = "BuPu") +
   ylab('Scaled time') + xlab('Pseudo time') +
-  theme(axis.text.x = element_text(angle = 90, hjust = 1, size = 12, face="bold")) +
-  theme(axis.text.y = element_text(angle = 0, hjust = 1, size = 12, face="bold")) +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1, size = 16, face="bold")) +
+  theme(axis.text.y = element_text(angle = 0, hjust = 1, size = 16, face="bold")) +
   theme(strip.background = element_rect(colour="black", fill="white",
                                         size=0.5, linetype="solid")) +
   
@@ -400,24 +551,24 @@ p1  <- ggplot(rna.s.t, aes(x= pt,y=t)) +
                               round(rna.s.t$t[rna.s.t$phase == 'G1.b'][1], 1), 
                               3, 4,
                               round(rna.s.t$t[rna.s.t$phase == 'M'][1], 1), 5, 6)) + 
-  scale_x_continuous(breaks=c(0, round(rna.s.t$pt[rna.s.t$phase == 'G1.b'][1], 1), 
-                              round(rna.s.t$pt[rna.s.t$phase == 'S'][1], 1), 2,
-                              round(rna.s.t$t[rna.s.t$phase == 'M'][1], 1), 3,
-                              round(rna.s.t$t[rna.s.t$phase == 'C'][1], 1), 4, 5, 6)) + 
+  scale_x_continuous(breaks=c(0, 1, 2, round(rna.s.t$pt[rna.s.t$phase == 'G1.b'][1], 1), 
+                              round(rna.s.t$pt[rna.s.t$phase == 'S'][1], 1), 4, 
+                              round(rna.s.t$pt[rna.s.t$phase == 'M'][1], 1),
+                              round(rna.s.t$pt[rna.s.t$phase == 'C'][1], 1), 5, 6)) + 
   
   #facet_wrap(spp~.) + 
   #ggtitle(titles[i]) +
   theme(
     plot.title = element_text(size=14, face = "bold.italic", color = 'red'),
-    axis.title.x = element_text(size=14, face="bold", hjust = 1),
-    axis.title.y = element_text(size=14, face="bold")
+    axis.title.x = element_text(size=18, face="bold", hjust = 1),
+    axis.title.y = element_text(size=18, face="bold")
   ) + 
-  theme(legend.position = c(0.9, 0.3),
-    #legend.position = 'none',
-    legend.title = element_text(colour="black", size=12, 
-                                face="bold"),
-    legend.text = element_text(colour="black", size=12, 
-                               face="bold"))
+  theme(#legend.position = c(0.9, 0.3),
+        legend.position = 'none',
+        legend.title = element_text(colour="black", size=12, 
+                                    face="bold"),
+        legend.text = element_text(colour="black", size=12, 
+                                   face="bold"))
 
 
 plot(p1)
@@ -442,16 +593,16 @@ p <- ggplot(data=ss, aes(x=phase0, y=prop, fill=phase)) +
   geom_text(aes(label=label), vjust=1.6, color="black", size=5, fontface="bold")+
   theme_minimal() + 
   ylab('') + xlab('') +
-  theme(axis.text.x = element_text(angle = 0, hjust = 1, size = 14, face="bold")) +
-  theme(axis.text.y = element_text(angle = 0, hjust = 1, size = 14, face="bold")) +
+  theme(axis.text.x = element_text(angle = 0, hjust = 1, size = 16, face="bold")) +
+  theme(axis.text.y = element_text(angle = 0, hjust = 1, size = 16, face="bold")) +
   theme(strip.background = element_rect(colour="black", fill="white",
                                         size=0.5, linetype="solid")) +
   #facet_wrap(spp~.) + 
   #ggtitle(titles[i]) +
   theme(
-    plot.title = element_text(size=14, face = "bold.italic", color = 'red'),
-    axis.title.x = element_text(size=14, face="bold", hjust = 1),
-    axis.title.y = element_text(size=14, face="bold")
+    plot.title = element_text(size=18, face = "bold.italic", color = 'red'),
+    axis.title.x = element_text(size=18, face="bold", hjust = 1),
+    axis.title.y = element_text(size=18, face="bold")
   ) + 
   theme(#legend.position = c(0.15, 0.85),
     legend.position = 'none',
@@ -466,7 +617,7 @@ plot(p)
 
 ggsave(filename="../Output/toxo_cdc/figures/phase_proportions.pdf",
        plot=p,
-       width = 8, height = 6,
+       width = 6, height = 6,
        units = "in", # other options are "in", "cm", "mm"
        dpi = 300
 )
@@ -474,8 +625,11 @@ ggsave(filename="../Output/toxo_cdc/figures/phase_proportions.pdf",
 
 ## Heatmaps
 sc.rna.mu.scale <- readRDS('../Input/toxo_cdc/rds/sc_rna_spline_mu_scale_phase.rds')
-
 sc.atac.mu.scale <- readRDS('../Input/toxo_cdc/rds/sc_atac_spline_mu_scale_phase.rds')
+
+## Filter for Marker genes
+sc.rna.mu.scale <- sc.rna.mu.scale[sc.rna.mu.scale$GeneID %in% marker.genes$gene,]
+sc.atac.mu.scale <- sc.atac.mu.scale[sc.atac.mu.scale$GeneID %in% marker.genes$gene,]
 
 
 p1 <- ggplot(sc.rna.mu.scale, aes(x = x, y = GeneID, fill = expr)) + 
@@ -546,8 +700,57 @@ ggsave(filename="../Output/toxo_cdc/figures/scATAC_heatmap_phase.png",
 )
 
 
+
+## Cross correlation
+cc.dat <- readRDS('../Input/toxo_cdc/rds/sc_rna_sc_atac_cross_cor_lag.rds')
+
+
+
+p2 <- ggplot(cc.dat, aes(x = ccs)) + 
+  geom_histogram(aes(y = ..density..),
+                 colour = 1, fill = "steelblue") + 
+  geom_density(lwd = 1.2,
+               linetype = 1,
+               colour = 2) + 
+  
+  theme_bw(base_size = 14) +
+  theme(legend.position = "right") +
+  #scale_fill_gradientn(colours = viridis::inferno(10)) +
+  #scale_fill_gradientn(colours = col_range(10)) +
+  #scale_fill_gradient(low = "gray66", high = "blue", midpoint = mid_point) + 
+  #scale_fill_brewer(palette = "BuPu") +
+  xlab('scRNA/scATAC cross corr.') + ylab('density') +
+  theme(axis.text.x = element_text(angle = 0, hjust = 1, size = 16, face="bold")) +
+  theme(axis.text.y = element_text(angle = 0, hjust = 1, size = 16, face="bold")) +
+  theme(strip.background = element_rect(colour="black", fill="white",
+                                        size=0.5, linetype="solid")) +
+  #facet_wrap(spp~.) + 
+  #ggtitle(titles[i]) +
+  theme(
+    plot.title = element_text(size=18, face = "bold.italic", color = 'red'),
+    axis.title.x = element_text(size=18, face="bold", hjust = 1),
+    axis.title.y = element_text(size=18, face="bold")
+  ) + 
+  theme(#legend.position = c(0.15, 0.85),
+    legend.position = 'none',
+    legend.title = element_text(colour="black", size=12, 
+                                face="bold"),
+    legend.text = element_text(colour="black", size=12, 
+                               face="bold"))
+
+
+plot(p2)
+
+
+
+ggsave(filename="../Output/toxo_cdc/figures/sc_rna_sc_atac_cross_corr.pdf",
+       plot=p2,
+       width = 6, height = 6,
+       units = "in"
+)
+
 ## AP2 clusters
-sc.rna.sc.atac.joint.long <- readRDS('../Input//toxo_cdc/rds//AP2_sc_rna_sc_atac_joint_dtw_clust.rds')
+sc.rna.sc.atac.joint.long <- readRDS('../Input//toxo_cdc/rds/AP2_sc_rna_sc_atac_joint_dtw_clust.rds')
 p1  <- ggplot(sc.rna.sc.atac.joint.long, aes(x= time,y=normExpr)) +
   geom_path(aes(color = Name,),alpha = 0.8, size = 1)+ 
   theme_bw(base_size = 14) +
@@ -559,7 +762,7 @@ p1  <- ggplot(sc.rna.sc.atac.joint.long, aes(x= time,y=normExpr)) +
                                         size=0.5, linetype="solid")) +
   theme(strip.text = element_text(size = 14, face="bold", angle = 0)) + 
   
-  coord_cartesian(xlim = c(0,6.5)) + 
+  #coord_cartesian(xlim = c(0,6.5)) + 
   geom_text_repel(aes(label = label), size = 2.5, fontface = "bold",
                   box.padding = unit(0.6, "lines"),
                   max.overlaps = 300,
@@ -584,63 +787,14 @@ p1  <- ggplot(sc.rna.sc.atac.joint.long, aes(x= time,y=normExpr)) +
     legend.title = element_text(colour="black", size=12, 
                                 face="bold"),
     legend.text = element_text(colour="black", size=12, 
-                               face="bold"))
+                               face="bold")) 
 
 
 plot(p1)
 
 ggsave(filename="../Output/toxo_cdc/figures/AP2_rna_atac_clusters.pdf",
        plot=p1,
-       width = 6, height = 8,
-       units = "in"
-)
-
-
-## Cross correlation
-cc.dat <- readRDS('../Input/toxo_cdc/rds/sc_rna_sc_atac_cross_cor_lag.rds')
-
-
-
-p2 <- ggplot(cc.dat, aes(x = ccs)) + 
-  geom_histogram(aes(y = ..density..),
-                 colour = 1, fill = "steelblue") + 
-  geom_density(lwd = 1.2,
-               linetype = 1,
-               colour = 2) + 
-
-theme_bw(base_size = 14) +
-  theme(legend.position = "right") +
-  #scale_fill_gradientn(colours = viridis::inferno(10)) +
-  #scale_fill_gradientn(colours = col_range(10)) +
-  #scale_fill_gradient(low = "gray66", high = "blue", midpoint = mid_point) + 
-  #scale_fill_brewer(palette = "BuPu") +
-  xlab('scRNA/scATAC cross corr.') + ylab('density') +
-  theme(axis.text.x = element_text(angle = 0, hjust = 1, size = 12, face="bold")) +
-  theme(axis.text.y = element_text(angle = 0, hjust = 1, size = 12, face="bold")) +
-  theme(strip.background = element_rect(colour="black", fill="white",
-                                        size=0.5, linetype="solid")) +
-  #facet_wrap(spp~.) + 
-  #ggtitle(titles[i]) +
-  theme(
-    plot.title = element_text(size=14, face = "bold.italic", color = 'red'),
-    axis.title.x = element_text(size=14, face="bold", hjust = 1),
-    axis.title.y = element_text(size=14, face="bold")
-  ) + 
-  theme(#legend.position = c(0.15, 0.85),
-    legend.position = 'none',
-    legend.title = element_text(colour="black", size=12, 
-                                face="bold"),
-    legend.text = element_text(colour="black", size=12, 
-                               face="bold"))
-
-
-plot(p2)
-
-
-
-ggsave(filename="../Output/toxo_cdc/figures/sc_rna_sc_atac_cross_corr.pdf",
-       plot=p2,
-       width = 6, height = 6,
+       width = 12, height = 8,
        units = "in"
 )
 
