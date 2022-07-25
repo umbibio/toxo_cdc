@@ -832,3 +832,19 @@ ggsave(filename="../Output/scClockFigs/RON2_track_pileup_by_phase.pdf",
 )
 
 
+## 3D plots
+
+
+fig <- plot_ly(rna_sub.pca, x = ~PC_1, y = ~PC_2, z = ~PC_3, color = ~phase, size = 0.5)
+
+fig <- fig %>% add_markers()
+
+fig <- fig %>% layout(scene = list(xaxis = list(title = 'PC1'),
+                                   
+                                   yaxis = list(title = 'PC2'),
+                                   
+                                   zaxis = list(title = 'PC3')))
+
+
+fig
+
