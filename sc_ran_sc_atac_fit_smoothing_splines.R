@@ -119,9 +119,9 @@ sc.rna.spline.fits <- mclapply(1:length(comm.genes), function(i){
   
   sc.rna.sp <- predict(sc.rna.sp, seq(0, 6, by = 1/3)) 
   #sc.rna.pp <- fitPsplines(t, y)
-  #plot(tmp$x, tmp$y)
+  plot(tmp$x, tmp$y)
   #points(t, y, col = 'red')
-  #points(sc.rna.sp$x, sc.rna.sp$y, type = 'l', col = 'red')
+  points(sc.rna.sp$x, sc.rna.sp$y, type = 'l', col = 'red')
   #points(sc.rna.sp$x, sc.rna.sp$y, type = 'l', col = 'blue')
   #points(sc.rna.pp$x, sc.rna.sp$y, type = 'l', col = 'green')
   mu <- data.frame(x = sc.rna.sp$x, y = sc.rna.sp$y) 

@@ -123,11 +123,12 @@ for(i in 1:length(conserved_TFs)){
   
 }
 
-p <- plot_trends('TGME49-305330')
+p <- plot_trends('TGME49-218220')
 
 plot(p)
 
-FeaturePlot(rna_sub, 'TGME49-305330', reduction = 'pca')
+FeaturePlot(rna_sub, 'TGME49-223940', reduction = 'pca', label = T)
+
 
 
 

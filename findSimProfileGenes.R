@@ -26,6 +26,7 @@ TGGT1_ME49 <- read.xlsx('../Input/toxo_genomics/Orthologs/TGGT1_ME49 Orthologs.x
 
 prod.desc <- left_join(prod.desc, TGGT1_ME49, by = c('GeneID' = 'TGGT1'))
 
+
 IMC_markers <- read.xlsx('../Input/compScBdTgPb/gene_function/IMC genes Toxoplasma.xlsx', sheet = 1)
 ME49_TGGT1  <- read.xlsx('../Input/compScBdTgPb/Orthologs/TGGT1_ME49 Orthologs.xlsx')
 IMC_markers <- left_join(IMC_markers, ME49_TGGT1, by = c('Gene.ID' = 'TGGT1'))
@@ -120,7 +121,7 @@ my.features <- c(MNK1, IMC29, IMC32, BCC0, BCC3, FBXO1, AC9)
 my.names <- c('MNK1', 'IMC29', 'IMC32', 'BCC0', 'BCC3', 'FBXO1', 'AC9')
 sim.genes.rna <- lapply(1:length(my.features), function(i){
   ind <- which(colnames(sc.rna.d) == my.features[i])
-  sim.genes <- quantile(sc.rna.d[ind, ], probs = 0.02)
+  sim.genes <- quantile(sc.rna.d[ind, ], probs = 0.01)
   sim.genes.ind <- which(sc.rna.d[ind, ] < sim.genes)
   colnames(sc.rna.d)[sim.genes.ind]
 })
@@ -128,7 +129,7 @@ sim.genes.rna <- lapply(1:length(my.features), function(i){
 
 sim.genes.atac <- lapply(1:length(my.features), function(i){
   ind <- which(colnames(sc.atac.d) == my.features[i])
-  sim.genes <- quantile(sc.atac.d[ind, ], probs = 0.02)
+  sim.genes <- quantile(sc.atac.d[ind, ], probs = 0.01)
   sim.genes.ind <- which(sc.atac.d[ind, ] < sim.genes)
   colnames(sc.atac.d)[sim.genes.ind]
 })
