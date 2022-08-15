@@ -37,12 +37,12 @@ sc.atac.spline.fits <- readRDS('../Input/toxo_cdc/rds/sc_atac_spline_fits_all_ge
 ## Turn the data into wide format (time by gene) and center & scale each gene
 sc.rna.dtw.wide <- sc.rna.spline.fits %>% 
   pivot_wider(names_from = 'GeneID', values_from = 'y') %>% 
-  mutate_at(vars(matches("TGME")), ~scale(., center = T, scale = T)) %>%
+  mutate_at(vars(matches("TGME")), ~scale(., center = F, scale = F)) %>%
   as.data.frame()
 
 sc.atac.dtw.wide <- sc.atac.spline.fits %>% 
   pivot_wider(names_from = 'GeneID', values_from = 'y') %>% 
-  mutate_at(vars(matches("TGME")), ~scale(., center = T, scale = T)) %>%
+  mutate_at(vars(matches("TGME")), ~scale(., center = F, scale = F)) %>%
   as.data.frame()
 
 
@@ -123,11 +123,11 @@ for(i in 1:length(conserved_TFs)){
   
 }
 
-p <- plot_trends('TGME49-218220')
+p <- plot_trends('TGME49-306320')
 
 plot(p)
 
-FeaturePlot(rna_sub, 'TGME49-223940', reduction = 'pca', label = T)
+FeaturePlot(rna_sub, 'TGME49-306320', reduction = 'pca', label = T)
 
 
 
