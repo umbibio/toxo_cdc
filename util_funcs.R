@@ -21,7 +21,7 @@ prep_S.O <- function(S.O, res = 0.1, var.features = F, down.sample = F){
     S.O <- FindNeighbors(S.O, dims = 1:13)
     S.O <- FindClusters(S.O, resolution = res)
   }
-  S.O <- RunUMAP(S.O, dims = 1:13)
+  S.O <- RunUMAP(S.O, dims = 1:13, n.components = 3L)
   return(S.O)
 }
 
