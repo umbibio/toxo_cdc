@@ -100,6 +100,49 @@ plot_trends <- function(my.GeneID){
   return(p)
 }
 
+AP2_degree <- read.xlsx('../Input/toxo_cdc/AP2_list/AP2_TFs_Network_Degree.xlsx')
+
+AP2_degree <- left_join(AP2_degree, TGGT1_ME49, by = c('GeneID' = 'TGGT1'))
+AP2_degree$Name <- gsub('AP2 domain transcription factor ', '', AP2_degree$ProductDescription)
+
+
+for(i in 1:nrow(AP2_degree)){
+  
+  p <- plot_trends(gsub('_', '-', AP2_degree$TGME49[i]))
+  f.n <- paste("../Output/toxo_cdc/figures/AP2_degree//", AP2_degree$Name[i], '.pdf', sep = '')
+  ggsave(filename=f.n,
+         plot=p,
+         width = 6, height = 6,
+         units = "in", # other options are "in", "cm", "mm"
+         dpi = 300
+  )
+  
+  
+}
+
+
+sig.AP2s <- readRDS('../Input/toxo_cdc/rds/sig_AP2s.rds')
+TGGT1_ME49 <- read.xlsx('../Input/toxo_genomics/Orthologs/TGGT1_ME49 Orthologs.xlsx')
+sig.AP2s <- sig.AP2s %>% transmute(GeneID = GeneID, Name = Ap2Name) %>% distinct()
+sig.AP2s <- left_join(sig.AP2s, TGGT1_ME49, by = c('GeneID' = 'TGGT1'))
+
+
+for(i in 1:nrow(sig.AP2s)){
+  
+  p <- plot_trends(gsub('_', '-', sig.AP2s$TGME49[i]))
+  f.n <- paste("../Output/toxo_cdc/figures/sig_AP2s/", sig.AP2s$Name[i], '.pdf', sep = '')
+  ggsave(filename=f.n,
+         plot=p,
+         width = 6, height = 6,
+         units = "in", # other options are "in", "cm", "mm"
+         dpi = 300
+  )
+  
+  
+}
+
+
+
 conserved_TFs <- c('TGME49-286710',
 'TGME49-206650',
 'TGME49-236840',
@@ -123,11 +166,24 @@ for(i in 1:length(conserved_TFs)){
   
 }
 
-p <- plot_trends('TGME49-306320')
+SNF2L <- 'TGME49-273870'
+p <- plot_trends(SNF2L)
 
 plot(p)
 
-FeaturePlot(rna_sub, 'TGME49-306320', reduction = 'pca', label = T)
+FeaturePlot(rna_sub, SNF2L, reduction = 'pca', label = T)
+
+
+Crk2 <- 'TGME49-218220'
+p <- plot_trends(Crk2)
+
+plot(p)
+
+AP2XII_8 <- 'TGME49-250800'
+
+p <- plot_trends(AP2XII_8)
+
+plot(p)
 
 
 

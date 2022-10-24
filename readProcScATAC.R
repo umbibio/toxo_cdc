@@ -400,7 +400,8 @@ peak.regions <- rownames(Tg_ATAC@assays$peaks@data)
 
 regions <- lapply(peak.regions, function(rr){
   region <- StringToGRanges(regions = gsub('TGME49-', 'TGME49_', rr),  sep = c("-", "-"))
-  xx <- findOverlaps(region, tx_trans, maxgap = 100)
+  #xx <- findOverlaps(region, tx_trans, maxgap = 100)
+  xx <- findOverlaps(region, tx_trans, ignore.strand=TRUE)
   tx_trans[xx@to]$gene_id
   L = list(region = region, gene_id = tx_trans[xx@to]$gene_id)
 })
@@ -434,38 +435,52 @@ saveRDS(region_gene_assignment, '../Input/toxo_cdc/rds/sc_atac_regions_gene_assi
 
 #### AP2s coverage
 sig.AP2s <- readRDS('../Input/toxo_cdc/rds/sig_AP2s.rds')
-sig.AP2s <- sig.AP2s %>% transmute(GeneID = GeneID.x, Name = Ap2Name) %>% distinct()
-regions.AP2s <- inner_join(regions, sig.AP2s, by = 'GeneID')
+TGGT1_ME49 <- read.xlsx('../Input/toxo_genomics/Orthologs/TGGT1_ME49 Orthologs.xlsx')
+sig.AP2s <- sig.AP2s %>% transmute(GeneID = GeneID, Name = Ap2Name) %>% distinct()
+sig.AP2s <- left_join(sig.AP2s, TGGT1_ME49, by = c('GeneID' = 'TGGT1'))
+regions.AP2s <- inner_join(regions, sig.AP2s, by = c('GeneID'= 'TGME49'))
 
 
 
 ### Coverage plots
 regions.AP2s$region <- paste(regions.AP2s$chr, regions.AP2s$strt, regions.AP2s$stp, sep = '-')
 
-my.region <- StringToGRanges(regions = regions.AP2s$region[4],  sep = c("-", "-"))
-#region <- StringToGRanges(regions = gsub('TGME49-', 'TGME49_', rownames(da_peaks)[5]),  sep = c("-", "-"))
-
-Idents(Tg_ATAC) <- 'phase'
-Tg_ATAC@active.ident <- factor(Tg_ATAC@active.ident, levels = c('G1.a', 'G1.b', 'S', 'M', 'C'))
-DefaultAssay(Tg_ATAC) <- 'peaks'
-p2 <- CoveragePlot(
-  object = Tg_ATAC,
-  sep = c("-", "-"),
-  #region = gsub('TGME49-', 'TGME49_', rownames(Tg_ATAC)[1:3]),
-  region = my.region,
-  #region = gsub('TGME49-', 'TGME49_', VariableFeatures(Tg_ATAC)[20]),
-  extend.upstream = 100,
-  extend.downstream =15000
-)
-
-plot(p2)
-ggsave(filename="../Output/toxo_cdc/figures/AP2III_2_track_pileup_by_phase.pdf",
-       plot=p2,
-       width = 6, height = 6,
-       units = "in", # other options are "in", "cm", "mm"
-       dpi = 300
-)
-
+for(Ap2 in sig.AP2s$Name){
+  my.AP2 <- Ap2
+  #Ap2.region <- regions.AP2s$region[regions.AP2s$Name == my.AP2]
+  
+  ## Manually extend the region to cover the AP2
+  chr <- gtf.filt.trn$V1[gtf.filt.trn$gene_name == sig.AP2s$TGME49[sig.AP2s$Name == my.AP2]]
+  strt <- gtf.filt.trn$V4[gtf.filt.trn$gene_name == sig.AP2s$TGME49[sig.AP2s$Name == my.AP2]]
+  stp <- gtf.filt.trn$V5[gtf.filt.trn$gene_name == sig.AP2s$TGME49[sig.AP2s$Name == my.AP2]]
+  Ap2.region <- paste(chr, strt - 50, stp + 50, sep = '-')
+  my.region <- StringToGRanges(regions = Ap2.region,  sep = c("-", "-"))
+  #region <- StringToGRanges(regions = gsub('TGME49-', 'TGME49_', rownames(da_peaks)[5]),  sep = c("-", "-"))
+  
+  Idents(Tg_ATAC) <- 'phase'
+  Tg_ATAC@active.ident <- factor(Tg_ATAC@active.ident, levels = c('G1.a', 'G1.b', 'S', 'M', 'C'))
+  DefaultAssay(Tg_ATAC) <- 'peaks'
+  p2 <- CoveragePlot(
+    object = Tg_ATAC,
+    sep = c("-", "-"),
+    #region = gsub('TGME49-', 'TGME49_', rownames(Tg_ATAC)[1:3]),
+    region = my.region,
+    #region = gsub('TGME49-', 'TGME49_', VariableFeatures(Tg_ATAC)[20]),
+    extend.upstream = 500,
+    extend.downstream =500
+  )
+  
+  #plot(p2)
+  f.out <- paste("../Output/toxo_cdc/figures/AP2_pileups/", my.AP2, "_track_pileup_by_phase.pdf", sep = '')
+  ggsave(filename=f.out,
+         plot=p2,
+         width = 6, height = 6,
+         units = "in", # other options are "in", "cm", "mm"
+         dpi = 300
+  )
+  
+  
+}
 
 
 ## Expression plot
