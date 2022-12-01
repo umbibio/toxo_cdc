@@ -166,22 +166,44 @@ for(i in 1:length(conserved_TFs)){
   
 }
 
-SNF2L <- 'TGME49-273870'
+SNF2L <- 'TGME49-224230'
+SNF2L <- 'TGME49-250800'
 p <- plot_trends(SNF2L)
+FeaturePlot(atac_sub, SNF2L, reduction = 'pca', label = T)
+
+
+plot(p)
+
+
+
+AP2VIIa6 <- 'TGME49-237800'
+p <- plot_trends(AP2VIIa6)
+Idents(atac_sub) <- 'phase'
+FeaturePlot(atac_sub, AP2VIIa6, reduction = 'pca', label = T)
 
 plot(p)
 
 FeaturePlot(rna_sub, SNF2L, reduction = 'pca', label = T)
 
 
+AP2Ib_1 <- 'TGGT1-208020'
+p <- plot_trends(AP2Ib_1)
+FeaturePlot(atac_sub, AP2Ib_1, reduction = 'pca', label = T)
+
+
+plot(p)
+
+
 Crk2 <- 'TGME49-218220'
 p <- plot_trends(Crk2)
+FeaturePlot(atac_sub, Crk2, reduction = 'pca', label = T)
 
 plot(p)
 
 AP2XII_8 <- 'TGME49-250800'
 
 p <- plot_trends(AP2XII_8)
+FeaturePlot(atac_sub, AP2XII_8, reduction = 'pca', label = T)
 
 plot(p)
 

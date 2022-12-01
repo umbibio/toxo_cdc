@@ -51,7 +51,7 @@ S.O  <- subset(S.O, features=selected_f, cells=selected_c)
 
 
 ## Downsample to 8000 cells for processing speed
-S.O <- subset(x = S.O.intra, downsample = 8000)
+S.O <- subset(x = S.O, downsample = 8000)
 
 
 ## This function processes the Seurat object to generate clusters (graph-based k-means)

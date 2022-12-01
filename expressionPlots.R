@@ -32,8 +32,9 @@ S.O.integrated <- readRDS('../Input/toxo_cdc/rds/S.O.intra_extra_crk2_ark3_lable
 
 
 ## Test plots
-Idents(S.Os[[1]]) <- 'phase'
-p <- DimPlot(S.Os[[1]], reduction = "pca", 
+S.Os <- S.O.list
+Idents(S.Os[[4]]) <- 'phase'
+p <- DimPlot(S.Os[[4]], reduction = "pca", 
              #group.by = "cell", 
              #split.by = 'spp',
              pt.size = 1,
@@ -54,7 +55,8 @@ plot(p)
 prod.desc[grep('AP2', prod.desc$ProductDescription),]
 DefaultAssay(S.O.merged) <- 'RNA'
 Idents(S.O.merged) <- 'phase'
-gene.id <- 'TGGT1-250800'
+gene.id <- 'TGGT1-233680'
+gene.id <- 'TGGT1-216880'
 FeaturePlot(S.O.merged, features = gene.id, split.by = 'spp', label = T)
 
 Idents(S.O.merged) <- 'spp'
@@ -76,3 +78,7 @@ p2 <- VlnPlot(S.O.crk2, features = gene.id)
 p3 <- VlnPlot(S.O.extra, features = gene.id)
 p4 <- VlnPlot(S.O.intra, features = gene.id)
 p1|p2|p3|p4
+
+Idents(S.O.merged) <- 'phase'
+VlnPlot(S.O.merged, features = gene.id, split.by = 'spp')
+

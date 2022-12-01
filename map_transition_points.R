@@ -153,12 +153,22 @@ tans.points <- function(mu.scale, lam = 0.1, prob = 0.1){
 ## ATAC transition points
 L.trans.atac <- tans.points(sc.atac.mu.scale, lam = 0.01, prob = 0)
 
+### NEW
+L.trans.atac <- tans.points(sc.atac.mu.scale, lam = 0.01, prob = 0)
+L.trans.atac$transition.points$y[L.trans.atac$transition.points$y < 0] <- 0
+L.trans.atac$transition.points$y[L.trans.atac$transition.points$y > 6] <- 6
+###
+
 saveRDS(L.trans.atac, '../Input/toxo_cdc/rds/atac_based_transition_points.rds')
 
 atac_peaks.dat <- L.trans.atac$spline.fit.peaks.smooth %>% 
   transmute(g = x, y = s0, yp = s1) %>% pivot_longer(-g, names_to = 'drivs', values_to = 'value')
 
-
+### NEW
+atac_peaks.dat <- L.trans.atac$spline.fit.peaks.smooth %>%  transmute(g = x, y = s0, yp = s1) %>% pivot_longer(-g, names_to = 'drivs', values_to = 'value')
+atac_peaks.dat$value[atac_peaks.dat$value < 0] <- 0
+atac_peaks.dat$value[atac_peaks.dat$value > 6] <- 6
+###
 
 atac_peaks.dat$drivs <- factor(atac_peaks.dat$drivs, levels = c('y', 'yp'))
 p1  <- ggplot(atac_peaks.dat, aes(x= g,y=value)) +
@@ -195,12 +205,27 @@ plot(p1)
 ## RNA transition points
 L.trans.rna <- tans.points(sc.rna.mu.scale, lam = 0.01, prob = 0)
 
+
+
+###### NEW
+L.trans.rna <- tans.points(sc.rna.mu.scale, lam = 0.01, prob = 0)
+L.trans.rna$transition.points$y[L.trans.rna$transition.points$y < 0] <- 0
+L.trans.rna$transition.points$y[L.trans.rna$transition.points$y > 6] <- 6
+#####
+
+
+
 #saveRDS(L.trans.rnac, '../Input/toxo_cdc/rds/rna_based_transition_points.rds')
 
 rna_peaks.dat <- L.trans.rna$spline.fit.peaks.smooth %>% 
   transmute(g = x, y = s0, yp = s1) %>% pivot_longer(-g, names_to = 'drivs', values_to = 'value')
 
+####NEW
+rna_peaks.dat <- L.trans.rna$spline.fit.peaks.smooth %>% transmute(g = x, y = s0, yp = s1) %>% pivot_longer(-g, names_to = 'drivs', values_to = 'value')
+rna_peaks.dat$value[rna_peaks.dat$value < 0] <- 0
+rna_peaks.dat$value[rna_peaks.dat$value > 6] <- 6
 
+####
 
 rna_peaks.dat$drivs <- factor(rna_peaks.dat$drivs, levels = c('y', 'yp'))
 p2  <- ggplot(rna_peaks.dat, aes(x= g,y=value)) +

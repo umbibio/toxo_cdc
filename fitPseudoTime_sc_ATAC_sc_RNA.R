@@ -69,6 +69,13 @@ fitTime <- function(S.O, method = 'rna', reverse.t = F){
   plot(sds.data$phase, sds.data$pt)
   
  
+  ### NEW
+  plot(sds.data$phase, sds.data$pt)
+  outlier.c <- sds.data$Sample[(sds.data$phase == "C" & sds.data$pt < 1)]
+  sds.data$phase[(sds.data$phase == "C" & sds.data$pt < 1)] <- 'G1.a'
+  ####
+  
+  
   ind.G1.a <- which(sds.data$phase == 'G1.a')
   ind.G1.b <- which(sds.data$phase == 'G1.b')
   ind.S <- which(sds.data$phase == 'S')

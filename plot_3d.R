@@ -55,7 +55,7 @@ pca.tg$phase <- factor(pca.tg$phase,
 
 
 
-x <- pca.tg %>% select(contains('PC')) %>% as.matrix()
+x <- pca.tg %>% dplyr::select(contains('PC')) %>% as.matrix()
 rownames(x) <- pca.tg$Sample
 #fit <- principal_curve(x, start = as.matrix(coord))
 fit <- principal_curve(x, smoother = 'periodic_lowess')
@@ -107,3 +107,10 @@ fig <- fig %>% layout(scene = list(xaxis = list(title = 'PC_1'),
 fig
 
 plot(sds.data$PC_1[sds.data$cell.ord], sds.data$PC_2[sds.data$cell.ord], type = 'l')
+
+
+#### isoMap
+library(RDRToolbox)
+iso <- Isomap(as.matrix(S.O@assays$RNA@data), dims=3, k=10, plotResiduals=TRUE)
+plot(iso$dim2)
+
