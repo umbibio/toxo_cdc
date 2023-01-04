@@ -12,7 +12,7 @@ source('util_funcs.R')
 ## The network in k-nn extracted from the Seurat object.
 
 sc.rna.genes.expr.pt <- readRDS('../Input/toxo_cdc/rds/ME49_59/sc_rna_genes_expr_pt.rds')
-sc.atac.genes.expr.pt <- readRDS('../Input/toxo_cdc/rds/ME49_59/sc_atac_genes_expr_pt.rds')
+#sc.atac.genes.expr.pt <- readRDS('../Input/toxo_cdc/rds/ME49_59/sc_atac_genes_expr_pt.rds')
 
 
 ## Calculate empirical covariance for scRNA
@@ -21,6 +21,7 @@ Ft.tg <- sc.rna.genes.expr.pt %>% dplyr::select(c('Sample', "GeneID", "log2.expr
 
 ## Remove genes with 0 variance
 X <- as.matrix(Ft.tg[,-1])
+rownames(X) <- Ft.tg$GeneID
 sds <- apply(X, 1, sd)
 rm.ind <- which(sds == 0)
 
@@ -28,7 +29,6 @@ if(length(rm.ind) > 0){
   X <- X[-rm.ind,]
 }
 
-rownames(X) <- Ft.tg$GeneID
 
 X.scale <- scale(t(X))
 S.tg <- cov(X.scale)
